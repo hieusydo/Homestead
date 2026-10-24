@@ -666,7 +666,9 @@ public class HomeGrid implements SettingsPanel.Host {
         cell.setOnLongClickListener(new View.OnLongClickListener() {
             // In Simple mode a held Select falls through to a normal click.
             public boolean onLongClick(View v) {
-                return !Prefs.simpleMode(ctx) && hideFocused();
+                if (Prefs.simpleMode(ctx)) return false;
+                focusedKey = it.key();
+                return hideFocused();
             }
         });
         cellsByKey.put(it.key(), cell);

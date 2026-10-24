@@ -66,6 +66,18 @@ public final class Prefs {
         return c.getSharedPreferences(FILE, Context.MODE_PRIVATE);
     }
 
+    /** Apply this TV's requested utility visibility once; Settings can restore it later. */
+    public static void applyOutfitUtilityVisibility(Context c) {
+        if (sp(c).getBoolean("outfit_utility_visibility_v1", false)) return;
+        Set<String> keys = hidden(c);
+        keys.add("app:com.ghisler.android.TotalCommander");
+        keys.add("app:com.esaba.downloader");
+        // Restore the favorite affected by the old long-press focus bug.
+        keys.remove("app:com.amazon.firetv.youtube");
+        sp(c).edit().putStringSet(K_HIDDEN, keys)
+                .putBoolean("outfit_utility_visibility_v1", true).apply();
+    }
+
     // ---------------------------------------------------------------- hidden tiles
 
     /** Returns a copy: a Set from SharedPreferences must not be mutated. */
