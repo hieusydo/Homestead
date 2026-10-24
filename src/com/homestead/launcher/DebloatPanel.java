@@ -77,6 +77,10 @@ public final class DebloatPanel {
 
         final List<Row> rows = new ArrayList<Row>();
 
+        p.addRow("Choose an app", "All installed apps", new Runnable() {
+            public void run() { host.showPanel(buildBrowser(c, host)); }
+        }).opens();
+
         // ------------------------------------------------------------------ bulk actions
         p.addHeader("All at once");
 
@@ -101,24 +105,30 @@ public final class DebloatPanel {
                 link.setLabel(live ? "ADB link" : "ADB link - open Setup to connect");
                 link.setValue(AdbBridge.statusLabel(c));
                 link.setValueColor(AdbBridge.isReady(c) ? OK : WARN);
-                bulkOff.cell.setEnabled(live);
-                bulkCaution.cell.setEnabled(live);
+                bulkOff.cell.setEnabled(true);
+                bulkCaution.cell.setEnabled(true);
                 int mine = Prefs.disabledByUs(c).size();
                 undo.setValue(mine == 0 ? "nothing to undo" : mine + " to restore");
-                undo.cell.setEnabled(live && mine > 0);
+                undo.cell.setEnabled(true);
             }
         };
 
         bulkOff.cell.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { runBulk(c, false, result, refreshAll); }
+            public void onClick(View v) {
+                if (!AdbBridge.canRun(c)) { host.showPanel(SetupPanel.build(c, host)); return; }
+                runBulk(c, false, result, refreshAll);
+            }
         });
         bulkCaution.cell.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { runBulk(c, true, result, refreshAll); }
+            public void onClick(View v) {
+                if (!AdbBridge.canRun(c)) { host.showPanel(SetupPanel.build(c, host)); return; }
+                runBulk(c, true, result, refreshAll);
+            }
         });
 
         undo.cell.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                if (!AdbBridge.canRun(c)) return;
+                if (!AdbBridge.canRun(c)) { host.showPanel(SetupPanel.build(c, host)); return; }
                 Set<String> mine = Prefs.disabledByUs(c);
                 if (mine.isEmpty()) return;
                 final String[] pkgs = mine.toArray(new String[mine.size()]);
@@ -173,7 +183,7 @@ public final class DebloatPanel {
             public void run() { host.closePanel(); }
         });
 
-        for (int i = 0; i < rows.size(); i++) rows.get(i).bind(c, refreshAll, result);
+        for (int i = 0; i < rows.size(); i++) rows.get(i).bind(c, host, refreshAll, result);
         refreshAll.run();
 
         final AdbBridge.Listener listener = new AdbBridge.Listener() {
@@ -204,11 +214,11 @@ public final class DebloatPanel {
             row.setHelp(e.note + (why != null ? "\n\n" + why : "") + "\n\n" + e.pkg);
         }
 
-        void bind(final Context c, final Runnable after, final Panel.Row result) {
+        void bind(final Context c, final SettingsPanel.Host host, final Runnable after, final Panel.Row result) {
             if (locked != null) return;
             row.cell.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
-                    if (!AdbBridge.canRun(c)) return;
+                    if (!AdbBridge.canRun(c)) { host.showPanel(SetupPanel.build(c, host)); return; }
                     final int was = Debloat.stateOf(c, entry.pkg);
                     if (was == Debloat.ABSENT) return;
                     final boolean turningOff = (was == Debloat.ENABLED);
@@ -257,7 +267,8 @@ public final class DebloatPanel {
                 row.cell.setEnabled(false);
                 return;
             }
-            row.cell.setEnabled(AdbBridge.canRun(c));
+            // Keep rows reachable with a D-pad even before the control link is ready.
+            row.cell.setEnabled(true);
             row.setValue(st == Debloat.ENABLED ? "on" : "off");
             row.setValueColor(st == Debloat.ENABLED ? WARN : OK);
         }
