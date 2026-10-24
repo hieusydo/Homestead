@@ -58,7 +58,7 @@ final class Backgrounds {
     /** Index 0 is the original look and the default. */
     static final Preset[] PRESETS = {
             new Preset("Sky",      0xFF6991C7, 0xFFA3BDED, 0xFFFFFFFF, 0xFF2C2C2C, 0),
-            new Preset("Obsidian", 0xFF080A0F, 0xFF182335, 0xFFFFFFFF, 0xFFE6EEF8, EDGE),
+            new Preset("Aurora", 0xFF080A0F, 0xFF182335, 0xFFFFFFFF, 0xFFE6EEF8, EDGE),
             new Preset("Charcoal", 0xFF1A1B1F, 0xFF3A3C44, 0xFFFFFFFF, 0xFFE6E6E6, EDGE),
             new Preset("Dusk",     0xFF2A1B3D, 0xFF6B3E7C, 0xFFFFFFFF, 0xFFF0E6F5, EDGE),
             new Preset("Black",    0xFF000000, 0xFF000000, 0xFFFFFFFF, 0xFFE6E6E6, EDGE),

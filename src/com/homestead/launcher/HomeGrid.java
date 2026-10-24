@@ -81,6 +81,8 @@ public class HomeGrid implements SettingsPanel.Host {
     private final ScrollView scroll;
     private final LinearLayout column;
     private final TextView clock;
+    private TextView selectedAppName;
+    private final List<View> topButtons = new ArrayList<View>();
 
     private final Map<String, View> cellsByKey = new HashMap<String, View>();
     /** The horizontally scrolling section rows, in build order. */
@@ -182,15 +184,6 @@ public class HomeGrid implements SettingsPanel.Host {
         clock = new OutfitTextView(c);
         clock.setTextColor(Color.WHITE);
         clock.setTextSize(TypedValue.COMPLEX_UNIT_SP, 32);
-        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP | Gravity.RIGHT);
-        clp.topMargin = dp(40);
-        clp.rightMargin = dp(33);
-        root.addView(clock, clp);
-        scroll.setOnScrollChangeListener(new View.OnScrollChangeListener() {
-            public void onScrollChange(View v,int x,int y,int ox,int oy) { clock.setTranslationY(-y); }
-        });
 
         AppModel.ensureLoaded(c);
         Backgrounds.ensureFolder(c);
@@ -233,7 +226,7 @@ public class HomeGrid implements SettingsPanel.Host {
         painted = state;
         look = p;
         root.setBackground(photo != null ? Backgrounds.photoDrawable(ctx, photo)
-                : Backgrounds.drawable(p));
+                : "Aurora".equals(p.name) ? ctx.getResources().getDrawable(R.drawable.aurora_wallpaper) : Backgrounds.drawable(p));
         paintText(clock);
         for (int i = 0; i < column.getChildCount(); i++) {
             View v = column.getChildAt(i);
@@ -510,6 +503,7 @@ public class HomeGrid implements SettingsPanel.Host {
     }
 
     private void buildSections() {
+        topButtons.clear();
         column.removeAllViews(); cellsByKey.clear(); rows.clear(); focusedCell=null; topTile=null;
         List<AppModel.Item> all=AppModel.visibleItems(ctx);
         List<AppModel.Item> favorites=new ArrayList<AppModel.Item>();
@@ -529,17 +523,82 @@ public class HomeGrid implements SettingsPanel.Host {
                 return Integer.compare(x,y);
             }
         });
-        int hour=java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
-        TextView greeting=new OutfitTextView(ctx);
-        greeting.setText(hour<12?"Good morning.":hour<18?"Good afternoon.":"Good evening.");
-        greeting.setTextSize(38); greeting.setFontVariationSettings("'wght' 300"); greeting.setTextColor(0xFFF3F5FA);
-        LinearLayout.LayoutParams gl=new LinearLayout.LayoutParams(-1,-2); gl.topMargin=dp(12); column.addView(greeting,gl);
-        TextView date=new OutfitTextView(ctx); date.setText(new SimpleDateFormat("EEEE, MMMM d",Locale.getDefault()).format(new Date()));
-        date.setTextSize(15); date.setTextColor(0xFF9DA9BC);
-        LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(-1,-2); dl.topMargin=dp(4); dl.bottomMargin=dp(30); column.addView(date,dl);
-        if(!favorites.isEmpty()) { addHeader("Your favorites",true); addTileGrid(favorites); }
-        if(!apps.isEmpty()) { addHeader("More apps",false); addTileGrid(apps); }
-        if(!controls.isEmpty()) { addHeader("Inputs & settings",false); addCardRow(controls); }
+        FrameLayout header = new FrameLayout(ctx);
+        header.setClipChildren(false);
+        TextView greeting = new OutfitTextView(ctx);
+        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        greeting.setText(hour < 12 ? "GOOD MORNING" : hour < 18 ? "GOOD AFTERNOON" : "GOOD EVENING");
+        greeting.setTextSize(11); greeting.setLetterSpacing(.20f); greeting.setTextColor(0xFFB9D6E1);
+        header.addView(greeting, new FrameLayout.LayoutParams(-2,-2));
+        if (clock.getParent() != null) ((ViewGroup)clock.getParent()).removeView(clock);
+        clock.setTextSize(40);
+        FrameLayout.LayoutParams timeLp = new FrameLayout.LayoutParams(dp(205),-2);
+        timeLp.topMargin=dp(18); header.addView(clock,timeLp);
+        TextView date = new OutfitTextView(ctx);
+        date.setText(new SimpleDateFormat("EEE, MMM d",Locale.getDefault()).format(new Date()).toUpperCase(Locale.getDefault()));
+        date.setTextSize(12); date.setLetterSpacing(.10f); date.setTextColor(0xFFB9D6E1);
+        FrameLayout.LayoutParams dateLp=new FrameLayout.LayoutParams(-2,-2);
+        dateLp.topMargin=dp(69); header.addView(date,dateLp);
+        LinearLayout toolbar=new LinearLayout(ctx);
+        toolbar.setOrientation(LinearLayout.HORIZONTAL); toolbar.setClipChildren(false);
+        toolbar.addView(topButton("Inputs",new Runnable() { public void run() { showInputs(controls); } }));
+        toolbar.addView(topButton("Wi-Fi",new Runnable() { public void run() {
+            try { ctx.startActivity(new Intent(android.provider.Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+            catch(Exception e) { Toast.makeText(ctx,"Open network settings from the TV settings menu",Toast.LENGTH_SHORT).show(); }
+        } }));
+        toolbar.addView(topButton("Settings",new Runnable() { public void run() { showPanel(SettingsPanel.build(ctx,HomeGrid.this)); } }));
+        FrameLayout.LayoutParams toolLp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.RIGHT);
+        toolLp.topMargin=dp(20); header.addView(toolbar,toolLp);
+        column.addView(header,new LinearLayout.LayoutParams(-1,dp(155)));
+        selectedAppName=new OutfitTextView(ctx);
+        selectedAppName.setText("YouTube"); selectedAppName.setTextSize(34); selectedAppName.setTextColor(Color.WHITE);
+        selectedAppName.setSingleLine(true); selectedAppName.setEllipsize(TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams nameLp=new LinearLayout.LayoutParams(-1,dp(55));
+        nameLp.leftMargin=dp(8); nameLp.bottomMargin=dp(12); column.addView(selectedAppName,nameLp);
+        if(!favorites.isEmpty()) addTileGrid(favorites);
+        if(!apps.isEmpty()) {
+            View gap=new View(ctx); column.addView(gap,new LinearLayout.LayoutParams(1,dp(26)));
+            addTileGrid(apps);
+        }
+        if (!topButtons.isEmpty() && !favorites.isEmpty()) {
+            View first=cellsByKey.get(favorites.get(0).key());
+            for(AppModel.Item it:favorites) {
+                View tile=cellsByKey.get(it.key());
+                if(tile!=null) tile.setNextFocusUpId(topButtons.get(0).getId());
+            }
+            if(first!=null) for(View button:topButtons) button.setNextFocusDownId(first.getId());
+        }
+    }
+
+    private View topButton(final String title, final Runnable action) {
+        final TextView button=new OutfitTextView(ctx);
+        button.setId(View.generateViewId()); topButtons.add(button);
+        button.setText(title); button.setTextSize(16); button.setGravity(Gravity.CENTER);
+        button.setTextColor(Color.WHITE); button.setFocusable(true); button.setFocusableInTouchMode(true);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(104),dp(40)); lp.leftMargin=dp(10); button.setLayoutParams(lp);
+        button.setBackground(pill(false));
+        button.setOnFocusChangeListener(new View.OnFocusChangeListener() { public void onFocusChange(View v,boolean has) {
+            button.setBackground(pill(has)); button.setTextColor(has?0xFF092332:Color.WHITE);
+            button.animate().scaleX(has?1.06f:1f).scaleY(has?1.06f:1f).setDuration(160).start();
+        } });
+        button.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { action.run(); } });
+        return button;
+    }
+
+    private Drawable pill(boolean focused) {
+        GradientDrawable bg=new GradientDrawable(); bg.setCornerRadius(dp(24));
+        bg.setColor(focused?0xFFF0FCFF:0x3359A9B9); bg.setStroke(dp(1),focused?0xFFFFFFFF:0x557CD6EB); return bg;
+    }
+
+    private void showInputs(List<AppModel.Item> controls) {
+        final Panel panel=new Panel(ctx,"Inputs","Choose a source");
+        for(final AppModel.Item it:controls) {
+            if(it.type==AppModel.TYPE_SETTINGS || it.type==AppModel.TYPE_HEALTH) continue;
+            panel.addRow(it.label,"",new Runnable() { public void run() {
+                closePanel(); if(listener!=null) listener.onPick(it); act(it);
+            } });
+        }
+        showPanel(panel.root);
     }
 
     /** Live TV first: one large tile, two banner cells wide, on its own row. */
@@ -614,7 +673,7 @@ public class HomeGrid implements SettingsPanel.Host {
 
     /** 6-column grid of banner tiles, built as plain rows. */
     private void addTileGrid(List<AppModel.Item> items) {
-        int w = AppModel.cellW(ctx);
+        int w = AppModel.cellW(ctx) - dp(24) / AppModel.columns(ctx);
         int h = AppModel.cellH(ctx);
         LinearLayout row = null;
         for (int i = 0; i < items.size(); i++) {
@@ -622,6 +681,9 @@ public class HomeGrid implements SettingsPanel.Host {
                 row = new LinearLayout(ctx);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setClipChildren(false);
+                row.setClipToPadding(false); row.setPadding(dp(12),dp(12),dp(12),dp(12));
+                GradientDrawable dock=new GradientDrawable(); dock.setCornerRadius(dp(22));
+                dock.setColor(0xC910141C); dock.setStroke(dp(1),0x334A6B80); row.setBackground(dock);
                 LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 if (i > 0) rlp.topMargin = dp(GAP_DP);
@@ -638,6 +700,7 @@ public class HomeGrid implements SettingsPanel.Host {
 
     private FrameLayout newCell(final AppModel.Item it) {
         final FrameLayout cell = new FrameLayout(ctx);
+        cell.setId(View.generateViewId());
         cell.setFocusable(true);
         cell.setFocusableInTouchMode(true);
         cell.setClipChildren(false);
@@ -646,11 +709,18 @@ public class HomeGrid implements SettingsPanel.Host {
                 if (has) {
                     focusedCell = v;
                     focusedKey = it.key();
+                    if (selectedAppName != null && it.type == AppModel.TYPE_APP) selectedAppName.setText(it.label);
                     style(v, true);
                     if (v == topTile) keepAtTop();
                 } else {
                     style(v, false);
                 }
+            }
+        });
+        cell.setOnHoverListener(new View.OnHoverListener() {
+            public boolean onHover(View v,android.view.MotionEvent event) {
+                if(event.getAction()==android.view.MotionEvent.ACTION_HOVER_ENTER) v.requestFocus();
+                return false;
             }
         });
         cell.setOnClickListener(new View.OnClickListener() {

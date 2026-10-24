@@ -68,6 +68,10 @@ public final class Prefs {
 
     /** Apply this TV's requested utility visibility once; Settings can restore it later. */
     public static void applyOutfitUtilityVisibility(Context c) {
+        if (!sp(c).getBoolean("outfit_hide_airplay_v1", false)) {
+            setHidden(c,"app:com.apple.airplay.amazon.airplay",true);
+            sp(c).edit().putBoolean("outfit_hide_airplay_v1",true).apply();
+        }
         if (sp(c).getBoolean("outfit_utility_visibility_v1", false)) return;
         Set<String> keys = hidden(c);
         keys.add("app:com.ghisler.android.TotalCommander");
