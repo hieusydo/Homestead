@@ -72,7 +72,7 @@ public final class DebloatPanel {
             p.addNote(absent + " listed packages are not on this TV. Models and Fire OS "
                     + "versions differ, and this list was checked on one model, so some of "
                     + "this TV's own packages may not be on it. Those are only in \"Browse "
-                    + "every system app\" below, which cannot tell you which are safe.");
+                    + "every installed app\" below, which cannot tell you which are safe.");
         }
 
         final List<Row> rows = new ArrayList<Row>();
@@ -156,7 +156,7 @@ public final class DebloatPanel {
 
         // ------------------------------------------------------------------ everything else
         p.addHeader("Beyond the list");
-        p.addRow("Browse every system app", "", new Runnable() {
+        p.addRow("Browse every installed app", "", new Runnable() {
             public void run() { host.showPanel(buildBrowser(c, host)); }
         }).opens();
         p.addNote("The list above has been checked as safe to switch off. The browser "
@@ -334,9 +334,14 @@ public final class DebloatPanel {
     }
 
     private static View buildBrowser(final Context c, final SettingsPanel.Host host) {
-        final List<Debloat.Installed> all = Debloat.installed(c, true);
-        final Panel p = new Panel(c, "Every system app",
+        final List<Debloat.Installed> all = Debloat.installed(c, false);
+        final Panel p = new Panel(c, "Every installed app",
                 all.size() + " packages on this TV");
+        p.addRow("App control connection", "Open Setup", new Runnable() {
+            public void run() { host.showPanel(SetupPanel.build(c, host)); }
+        });
+        p.addNote("To switch apps on or off from the remote, enable the on-device tunnel in Setup and approve the TV prompts. The computer's connection does not connect this app.");
+
 
         p.addText("Anything the system is currently using as a keyboard, a TV input, "
                 + "a home screen, a device administrator or an accessibility service is locked, "
