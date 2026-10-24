@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.homestead.launcher;
+package com.cleantv.outfit;
 
 import android.content.Context;
 import android.view.View;
@@ -135,7 +135,7 @@ public final class SettingsPanel {
                     public void run() { hidden.setValue(String.valueOf(Prefs.hiddenCount(c))); }
                 }));
 
-        p.addNote("Press the MENU button on any tile to hide it (long-press works too; not "
+        p.addNote("Press MENU to open Settings. Long-press a tile to hide it (not "
                 + "in Simple mode). Hiding only changes what this launcher draws - nothing is "
                 + "disabled or uninstalled, and the app still works everywhere else.");
 

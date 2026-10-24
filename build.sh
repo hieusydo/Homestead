@@ -50,7 +50,7 @@ rm -rf classes dex gen app-unsigned.apk app-with-dex.apk app-aligned.apk compile
 mkdir -p classes dex res/drawable-nodpi
 
 echo "==> artwork"
-java tools/MakeArt.java res/drawable-nodpi >/dev/null
+java -Djava.awt.headless=true tools/MakeArt.java res/drawable-nodpi >/dev/null
 
 echo "==> aapt2 compile"
 "$BT/aapt2" compile --dir res -o compiled.flata

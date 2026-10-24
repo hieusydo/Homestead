@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.homestead.launcher;
+package com.cleantv.outfit;
 
 import android.content.Context;
 import android.content.ComponentName;
@@ -68,9 +68,9 @@ public class HomeGrid implements SettingsPanel.Host {
     // Layout metrics.
     private static final int MARGIN_DP = 32;
     private static final int GAP_DP = 16;
-    private static final int CARD_W_DP = 167;   // wide card, non-TV row
-    private static final int CARD_H_DP = 94;
-    private static final int HEADER_SP = 21;
+    private static final int CARD_W_DP = 138;   // wide card, non-TV row
+    private static final int CARD_H_DP = 58;
+    private static final int HEADER_SP = 17;
     private static final int HEADER_TOP_DP = 28;
     private static final int HEADER_BOTTOM_DP = 12;
 
@@ -154,11 +154,7 @@ public class HomeGrid implements SettingsPanel.Host {
                 // five presses in a row open Settings instead.
                 if (e.getKeyCode() == android.view.KeyEvent.KEYCODE_MENU && panels.isEmpty()) {
                     if (e.getAction() == android.view.KeyEvent.ACTION_UP) {
-                        if (!Prefs.simpleMode(ctx)) hideFocused();
-                        else if (menuTaps.tap()) {
-                            logOpen("Settings (Menu x" + MenuTaps.COUNT + ")");
-                            showPanel(SettingsPanel.build(ctx, HomeGrid.this));
-                        }
+                        showPanel(SettingsPanel.build(ctx, HomeGrid.this));
                     }
                     return true;
                 }
@@ -179,19 +175,22 @@ public class HomeGrid implements SettingsPanel.Host {
         column.setOrientation(LinearLayout.VERTICAL);
         column.setClipChildren(false);
         column.setClipToPadding(false);
-        column.setPadding(dp(MARGIN_DP), dp(46), dp(MARGIN_DP), dp(MARGIN_DP));
+        column.setPadding(dp(MARGIN_DP), dp(36), dp(MARGIN_DP), dp(MARGIN_DP));
         scroll.addView(column, new ScrollView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        clock = new TextView(c);
+        clock = new OutfitTextView(c);
         clock.setTextColor(Color.WHITE);
-        clock.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        clock.setTextSize(TypedValue.COMPLEX_UNIT_SP, 32);
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
                 Gravity.TOP | Gravity.RIGHT);
-        clp.topMargin = dp(14);
+        clp.topMargin = dp(40);
         clp.rightMargin = dp(33);
         root.addView(clock, clp);
+        scroll.setOnScrollChangeListener(new View.OnScrollChangeListener() {
+            public void onScrollChange(View v,int x,int y,int ox,int oy) { clock.setTranslationY(-y); }
+        });
 
         AppModel.ensureLoaded(c);
         Backgrounds.ensureFolder(c);
@@ -264,11 +263,8 @@ public class HomeGrid implements SettingsPanel.Host {
 
     /** Focus for a fresh Home press: Live TV when it comes first, else as takeFocus(). */
     public void takeStartFocus() {
-        if (liveTvFirst() && selectKey(AppModel.LIVETV_KEY)) {
-            scroll.scrollTo(0, 0);
-            return;
-        }
-        takeFocus();
+        selectKey("app:com.amazon.firetv.youtube");
+        keepAtTop();
     }
 
     /**
@@ -293,6 +289,7 @@ public class HomeGrid implements SettingsPanel.Host {
     public void takeFocus() {
         if (focusedKey != null && selectKey(focusedKey)) return;
         List<AppModel.Item> items = AppModel.visibleItems(ctx);
+        for (AppModel.Item it:items) if ("com.amazon.firetv.youtube".equals(it.pkg) && selectKey(it.key())) return;
         if (!items.isEmpty()) selectKey(items.get(0).key());
     }
 
@@ -513,74 +510,38 @@ public class HomeGrid implements SettingsPanel.Host {
     }
 
     private void buildSections() {
-        column.removeAllViews();
-        cellsByKey.clear();
-        rows.clear();
-        focusedCell = null;
-
-        List<AppModel.Item> inputs = new ArrayList<AppModel.Item>();
-        List<AppModel.Item> nonTv = new ArrayList<AppModel.Item>();
-        List<AppModel.Item> tv = new ArrayList<AppModel.Item>();
-
-        // Live TV first takes the Live TV tile out of its section and puts it above them all.
-        boolean tvFirst = liveTvFirst();
-        AppModel.Item liveTv = null;
-        topTile = null;
-
-        List<AppModel.Item> all = AppModel.visibleItems(ctx);
-        for (int i = 0; i < all.size(); i++) {
-            AppModel.Item it = all.get(i);
-            if (tvFirst && it.type == AppModel.TYPE_LIVETV) {
-                liveTv = it;
-            } else if (it.type == AppModel.TYPE_INPUT || it.type == AppModel.TYPE_LIVETV
-                    || it.type == AppModel.TYPE_AMAZON_HOME
-                    || it.type == AppModel.TYPE_SETTINGS || it.type == AppModel.TYPE_HEALTH) {
-                inputs.add(it);
-            } else if (it.tvApp && it.banner != null) {
-                tv.add(it);
-            } else {
-                nonTv.add(it);
-            }
+        column.removeAllViews(); cellsByKey.clear(); rows.clear(); focusedCell=null; topTile=null;
+        List<AppModel.Item> all=AppModel.visibleItems(ctx);
+        List<AppModel.Item> favorites=new ArrayList<AppModel.Item>();
+        List<AppModel.Item> controls=new ArrayList<AppModel.Item>();
+        List<AppModel.Item> apps=new ArrayList<AppModel.Item>();
+        String[] order={"com.amazon.firetv.youtube","com.netflix.ninja","com.hbo.hbonow","com.abclocal.kgo.tv.amazon","com.nbcuni.nbcots.nbcbayarea.firetv"};
+        for(String pkg:order) for(AppModel.Item it:all) if(pkg.equals(it.pkg)) {favorites.add(it);break;}
+        for(AppModel.Item it:all) {
+            if(it.type!=AppModel.TYPE_APP) controls.add(it);
+            else if(!favorites.contains(it) && (it.tvApp || Prefs.showNonTv(ctx))
+              && !"com.homestead.launcher".equals(it.pkg)) apps.add(it);
         }
-
-        // Settings and TV Health survive the section being switched off.
-        if (!Prefs.showInputs(ctx)) {
-            List<AppModel.Item> keep = new ArrayList<AppModel.Item>();
-            for (int i = 0; i < inputs.size(); i++) {
-                int t = inputs.get(i).type;
-                if (t == AppModel.TYPE_SETTINGS || t == AppModel.TYPE_HEALTH) keep.add(inputs.get(i));
+        java.util.Collections.sort(controls,new java.util.Comparator<AppModel.Item>() {
+            public int compare(AppModel.Item a,AppModel.Item b) {
+                int x=a.type==AppModel.TYPE_SETTINGS?-2:a.type==AppModel.TYPE_HEALTH?99:0;
+                int y=b.type==AppModel.TYPE_SETTINGS?-2:b.type==AppModel.TYPE_HEALTH?99:0;
+                return Integer.compare(x,y);
             }
-            inputs = keep;
-        }
-        if (!Prefs.showNonTv(ctx)) nonTv.clear();
-
-        // Simple mode drops them too, unless nothing else is left: an empty grid has
-        // nothing to focus, so the Menu presses that open Settings may not reach us.
-        if (Prefs.simpleMode(ctx)) {
-            List<AppModel.Item> rest = new ArrayList<AppModel.Item>();
-            for (int i = 0; i < inputs.size(); i++) {
-                int t = inputs.get(i).type;
-                if (t != AppModel.TYPE_SETTINGS && t != AppModel.TYPE_HEALTH) rest.add(inputs.get(i));
-            }
-            if (!rest.isEmpty() || !nonTv.isEmpty() || !tv.isEmpty() || liveTv != null) {
-                inputs = rest;
-            }
-        }
-
-        String inputsTitle = ctx.getString(R.string.home_sec_inputs);
-        String nonTvTitle = ctx.getString(R.string.home_sec_nontv);
-        String tvTitle = ctx.getString(R.string.home_sec_tv);
-        boolean first = true;
-        if (tvFirst) {
-            if (liveTv != null)    { addLiveTvTile(liveTv); first = false; }
-            if (!tv.isEmpty())     { addHeader(tvTitle, first); first = false; addTileGrid(tv); }
-            if (!inputs.isEmpty()) { addHeader(inputsTitle, first); first = false; addCardRow(inputs); }
-            if (!nonTv.isEmpty())  { addHeader(nonTvTitle, first); addCardRow(nonTv); }
-            return;
-        }
-        if (!inputs.isEmpty()) { addHeader(inputsTitle, first); first = false; addCardRow(inputs); }
-        if (!nonTv.isEmpty())  { addHeader(nonTvTitle, first); first = false; addCardRow(nonTv); }
-        if (!tv.isEmpty())     { addHeader(tvTitle, first); addTileGrid(tv); }
+        });
+        TextView brand=new OutfitTextView(ctx); brand.setText("H O M E S T E A D  /  O U T F I T");
+        brand.setTextSize(11); brand.setTextColor(0xFF90A3BB); column.addView(brand);
+        int hour=java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        TextView greeting=new OutfitTextView(ctx);
+        greeting.setText(hour<12?"Good morning.":hour<18?"Good afternoon.":"Good evening.");
+        greeting.setTextSize(38); greeting.setFontVariationSettings("'wght' 300"); greeting.setTextColor(0xFFF3F5FA);
+        LinearLayout.LayoutParams gl=new LinearLayout.LayoutParams(-1,-2); gl.topMargin=dp(12); column.addView(greeting,gl);
+        TextView date=new OutfitTextView(ctx); date.setText(new SimpleDateFormat("EEEE, MMMM d",Locale.getDefault()).format(new Date()));
+        date.setTextSize(15); date.setTextColor(0xFF9DA9BC);
+        LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(-1,-2); dl.topMargin=dp(4); dl.bottomMargin=dp(30); column.addView(date,dl);
+        if(!favorites.isEmpty()) { addHeader("Your favorites",true); addTileGrid(favorites); }
+        if(!controls.isEmpty()) { addHeader("Inputs & settings",false); addCardRow(controls); }
+        if(!apps.isEmpty()) { addHeader("More apps",false); addTileGrid(apps); }
     }
 
     /** Live TV first: one large tile, two banner cells wide, on its own row. */
@@ -597,14 +558,14 @@ public class HomeGrid implements SettingsPanel.Host {
         text.setGravity(Gravity.CENTER_VERTICAL);
         text.setPadding(dp(24), dp(12), dp(24), dp(12));
 
-        TextView title = new TextView(ctx);
+        TextView title = new OutfitTextView(ctx);
         title.setText(it.label);
         title.setTextColor(Color.WHITE);
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30);
         title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         text.addView(title);
 
-        TextView hint = new TextView(ctx);
+        TextView hint = new OutfitTextView(ctx);
         hint.setText(ctx.getString(R.string.home_livetv_hint));
         hint.setTextColor(0xCCFFFFFF);
         hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
@@ -618,7 +579,7 @@ public class HomeGrid implements SettingsPanel.Host {
     }
 
     private void addHeader(String text, boolean first) {
-        TextView h = new TextView(ctx);
+        TextView h = new OutfitTextView(ctx);
         h.setText(text);
         paintText(h);
         h.setTextSize(TypedValue.COMPLEX_UNIT_SP, HEADER_SP);
@@ -737,16 +698,14 @@ public class HomeGrid implements SettingsPanel.Host {
         if (focused) {
             GradientDrawable ring = new GradientDrawable();
             ring.setCornerRadius(dp(8));
-            ring.setStroke(dp(3), look.ring);
+            ring.setStroke(dp(2), look.ring);
             ring.setColor(Color.TRANSPARENT);
             f.setForeground(ring);
-            f.setScaleX(1.10f);
-            f.setScaleY(1.10f);
+            f.animate().scaleX(1.045f).scaleY(1.045f).setDuration(160).start();
             f.setTranslationZ(dp(8));
         } else {
             f.setForeground(outline());
-            f.setScaleX(1f);
-            f.setScaleY(1f);
+            f.animate().scaleX(1f).scaleY(1f).setDuration(160).start();
             f.setTranslationZ(0f);
         }
     }
@@ -771,12 +730,12 @@ public class HomeGrid implements SettingsPanel.Host {
         // Live TV first: inputs go a quiet grey so only the Live TV tile stands out, and
         // app labels get larger and brighter.
         boolean tvFirst = liveTvFirst();
-        if (textTile) card.setColor(tvFirst ? 0xFF2A333D : 0xFF0E5A63);
-        else card.setColor(0xFF033058);
+        if (textTile) card.setColor(tvFirst ? 0xFF2A333D : 0xFF1B2533);
+        else card.setColor(0xFF171E2A);
         cell.setBackground(card);
 
         if (textTile) {
-            TextView tv = new TextView(ctx);
+            TextView tv = new OutfitTextView(ctx);
             tv.setText(it.label);
             tv.setTextColor(Color.WHITE);
             tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
@@ -799,7 +758,7 @@ public class HomeGrid implements SettingsPanel.Host {
         ilp.rightMargin = dp(9);
         row.addView(ic, ilp);
 
-        TextView tv = new TextView(ctx);
+        TextView tv = new OutfitTextView(ctx);
         tv.setText(it.label);
         tv.setTextColor(tvFirst ? 0xFFD5DDE5 : 0xFFA2AFBB);
         tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, tvFirst ? 14 : 12);

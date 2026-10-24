@@ -1,3 +1,11 @@
+# Homestead Outfit
+
+Custom Outfit edition with an Obsidian theme, five fixed favorites, compact input controls, and one-press Menu access to wallpaper settings. Package: `com.cleantv.outfit`, installed alongside the official app.
+
+See [custom build, install, and restore instructions](CUSTOM-README.md). The upstream documentation below describes the original edition; its layout and update instructions differ from this fork.
+
+---
+
 # Homestead
 
 A replacement home screen for Fire TV: no advertising rows, no auto-playing trailers, no

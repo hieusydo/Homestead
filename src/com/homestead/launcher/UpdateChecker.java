@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.homestead.launcher;
+package com.cleantv.outfit;
 
 import android.content.Context;
 import android.os.Handler;
@@ -42,7 +42,7 @@ public final class UpdateChecker {
     private static final String TAG = "Homestead";
 
     /** owner/repo. One line to change if distribution moves to a dedicated releases repo. */
-    static final String REPO = "Sarg338/Homestead";
+    static final String REPO = "hieusydo/Homestead";
 
     private static final String API =
             "https://api.github.com/repos/" + REPO + "/releases/latest";

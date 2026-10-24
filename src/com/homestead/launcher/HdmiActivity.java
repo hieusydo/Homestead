@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.homestead.launcher;
+package com.cleantv.outfit;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -71,7 +71,7 @@ public class HdmiActivity extends Activity {
         root.addView(tvView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        status = new TextView(this);
+        status = new OutfitTextView(this);
         status.setTextColor(Color.WHITE);
         status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
         root.addView(status, new FrameLayout.LayoutParams(

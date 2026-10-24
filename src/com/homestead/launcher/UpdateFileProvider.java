@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.homestead.launcher;
+package com.cleantv.outfit;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;
@@ -31,7 +31,7 @@ import java.io.FileNotFoundException;
  */
 public final class UpdateFileProvider extends ContentProvider {
 
-    private static final String AUTHORITY = "com.homestead.launcher.updates";
+    private static final String AUTHORITY = "com.cleantv.outfit.updates";
     private static final String FILE_NAME = "homestead-update.apk";
     private static final String MIME = "application/vnd.android.package-archive";
 

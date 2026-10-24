@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.homestead.launcher;
+package com.cleantv.outfit;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -100,7 +100,7 @@ public final class Prefs {
     public static void setSort(Context c, int v) { sp(c).edit().putInt(K_SORT, v).apply(); }
 
     public static int columns(Context c) {
-        int n = sp(c).getInt(K_COLUMNS, 6);
+        int n = sp(c).getInt(K_COLUMNS, 5);
         if (n < 4) n = 4;
         if (n > 8) n = 8;
         return n;
@@ -110,11 +110,11 @@ public final class Prefs {
     public static boolean showInputs(Context c) { return sp(c).getBoolean(K_SEC_INPUTS, true); }
     public static void setShowInputs(Context c, boolean v) { sp(c).edit().putBoolean(K_SEC_INPUTS, v).apply(); }
 
-    public static boolean showNonTv(Context c) { return sp(c).getBoolean(K_SEC_NONTV, true); }
+    public static boolean showNonTv(Context c) { return sp(c).getBoolean(K_SEC_NONTV, false); }
     public static void setShowNonTv(Context c, boolean v) { sp(c).edit().putBoolean(K_SEC_NONTV, v).apply(); }
 
     /** Index into Backgrounds.PRESETS. */
-    public static int background(Context c) { return sp(c).getInt(K_BACKGROUND, 0); }
+    public static int background(Context c) { return sp(c).getInt(K_BACKGROUND, 1); }
     public static void setBackground(Context c, int v) { sp(c).edit().putInt(K_BACKGROUND, v).apply(); }
 
     /** Index into Backgrounds.DIM_NAMES. Light by default, so labels stay readable. */
@@ -155,7 +155,7 @@ public final class Prefs {
         sp(c).edit().putLong(K_UPDATE_STARTED, at).commit();   // must survive the replace
     }
 
-    public static boolean reapplyOnBoot(Context c) { return sp(c).getBoolean(K_REAPPLY, true); }
+    public static boolean reapplyOnBoot(Context c) { return sp(c).getBoolean(K_REAPPLY, false); }
     public static void setReapplyOnBoot(Context c, boolean v) {
         sp(c).edit().putBoolean(K_REAPPLY, v).apply();
     }
@@ -166,7 +166,7 @@ public final class Prefs {
     }
 
     /** Whether the first-run wizard has been completed or skipped. */
-    public static boolean onboarded(Context c) { return sp(c).getBoolean(K_ONBOARDED, false); }
+    public static boolean onboarded(Context c) { return sp(c).getBoolean(K_ONBOARDED, true); }
     public static void setOnboarded(Context c, boolean v) {
         sp(c).edit().putBoolean(K_ONBOARDED, v).apply();
     }
@@ -191,7 +191,7 @@ public final class Prefs {
 
     // ---------------------------------------------------------------- updates
 
-    public static boolean autoUpdateCheck(Context c) { return sp(c).getBoolean(K_UPD_AUTO, true); }
+    public static boolean autoUpdateCheck(Context c) { return sp(c).getBoolean(K_UPD_AUTO, false); }
     public static void setAutoUpdateCheck(Context c, boolean v) {
         sp(c).edit().putBoolean(K_UPD_AUTO, v).apply();
     }

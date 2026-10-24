@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.homestead.launcher;
+package com.cleantv.outfit;
 
 import android.content.Context;
 import android.graphics.Color;
@@ -501,7 +501,7 @@ public final class OnboardingPanel {
     // ---------------------------------------------------------------- widgets
 
     private View button(String label, final boolean primary, final Runnable onClick) {
-        final TextView b = new TextView(c);
+        final TextView b = new OutfitTextView(c);
         b.setText(label);
         b.setTextColor(primary ? WHITE : BODY);
         b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
@@ -543,7 +543,7 @@ public final class OnboardingPanel {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
 
-        final TextView check = new TextView(c);
+        final TextView check = new OutfitTextView(c);
         check.setGravity(Gravity.CENTER);
         check.setTextColor(NAVY);
         check.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
@@ -625,7 +625,7 @@ public final class OnboardingPanel {
         m.setBackground(back);
         m.setPadding(dp(14), dp(11), dp(16), dp(11));
 
-        TextView num = new TextView(c);
+        TextView num = new OutfitTextView(c);
         num.setText(n);
         num.setGravity(Gravity.CENTER);
         num.setTextColor(NAVY);
@@ -649,7 +649,7 @@ public final class OnboardingPanel {
     }
 
     private TextView pill() {
-        TextView t = new TextView(c);
+        TextView t = new OutfitTextView(c);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
         t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         t.setPadding(dp(16), dp(11), dp(20), dp(11));
@@ -667,7 +667,7 @@ public final class OnboardingPanel {
         LinearLayout m = new LinearLayout(c);
         m.setOrientation(LinearLayout.HORIZONTAL);
         m.setGravity(Gravity.CENTER_VERTICAL);
-        TextView bx = new TextView(c);
+        TextView bx = new OutfitTextView(c);
         bx.setText(on ? "✓" : "•");
         bx.setGravity(Gravity.CENTER);
         bx.setTextColor(on ? NAVY : MUTE);
@@ -690,7 +690,7 @@ public final class OnboardingPanel {
     }
 
     private View glyph(String s, int fontPx) {
-        TextView t = new TextView(c);
+        TextView t = new OutfitTextView(c);
         t.setText(s);
         t.setGravity(Gravity.CENTER);
         t.setTextColor(WHITE);
@@ -705,7 +705,7 @@ public final class OnboardingPanel {
     }
 
     private View badge(String s) {
-        TextView t = new TextView(c);
+        TextView t = new OutfitTextView(c);
         t.setText(s.toUpperCase(java.util.Locale.US));
         t.setTextColor(WARN);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
@@ -727,7 +727,7 @@ public final class OnboardingPanel {
     }
 
     private TextView tag(String s) {
-        TextView t = new TextView(c);
+        TextView t = new OutfitTextView(c);
         t.setText(s.toUpperCase(java.util.Locale.US));
         t.setTextColor(HEAD);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
@@ -753,7 +753,7 @@ public final class OnboardingPanel {
     }
 
     private TextView text(String s, int sizeSp, int color, int style) {
-        TextView t = new TextView(c);
+        TextView t = new OutfitTextView(c);
         t.setText(s);
         t.setTextColor(color);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp);

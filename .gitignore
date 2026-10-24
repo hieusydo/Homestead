@@ -18,3 +18,10 @@ res/drawable-nodpi/
 
 # patches
 *.patch
+
+# Local build credentials and generated source lists
+*.keystore
+*.jks
+.env
+.env.*
+classes.txt

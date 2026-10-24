@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.homestead.launcher;
+package com.cleantv.outfit;
 
 import android.content.Context;
 import android.graphics.Color;
@@ -422,7 +422,7 @@ public class Panel {
     }
 
     private TextView text(String s, int sp, int color) {
-        TextView t = new TextView(ctx);
+        TextView t = new OutfitTextView(ctx);
         t.setText(s);
         t.setTextColor(color);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);

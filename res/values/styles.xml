@@ -6,7 +6,7 @@
   -->
   <style name="InstantHome" parent="@android:style/Theme.DeviceDefault.NoActionBar">
     <item name="android:windowAnimationStyle">@null</item>
-    <item name="android:windowBackground">#FF86A7DA</item>
+    <item name="android:windowBackground">#FF090B10</item>
     <item name="android:windowDisablePreview">false</item>
     <item name="android:windowContentTransitions">false</item>
     <item name="android:windowActivityTransitions">false</item>
