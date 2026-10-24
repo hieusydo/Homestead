@@ -3,7 +3,7 @@
 Built from Homestead 1.6.2 (GPL-3.0) for Insignia NS-50DF710NA21, Fire OS 7.7.1.5. Outfit is bundled under SIL OFL; see OUTFIT-LICENSE.txt. Original Homestead remains installed. Package: com.cleantv.outfit.
 
 ## Design
-Outfit typography, Obsidian gradient, greeting/date/clock, five-column favorites in this order: YouTube, Netflix, HBO Max, ABC7, NBC Bay Area. Compact inputs and Settings, then remaining TV apps. No blur or video background. All visible text uses bundled Outfit. Menu opens Settings in one press; Settings is always the first control tile. Background is under Menu > Background. Long-press a tile to hide it. Automatic upstream update checks and automatic debloat reapplication default off in this fork.
+Outfit typography, Obsidian gradient, greeting/date/clock, five-column favorites in this order: YouTube, Netflix, HBO Max, ABC7, NBC Bay Area. Remaining TV apps follow favorites; compact inputs and Settings occupy the last row. No blur or video background. All visible text uses bundled Outfit. Menu opens Settings in one press; Settings is always the first control tile. Background is under Menu > Background. Long-press a tile to hide it. Automatic upstream update checks and automatic debloat reapplication default off in this fork.
 
 ## Build
 Set `HOMESTEAD_KEYPASS` to your local signing password, then run `bash build-local.sh`. Local Java and Android tools are in ../output/toolchain. Keep ../output/outfit-signing.keystore to sign future updates. It is a local development key; do not publish it. Build verifies the resulting APK signature.

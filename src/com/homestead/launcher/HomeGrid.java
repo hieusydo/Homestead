@@ -538,8 +538,8 @@ public class HomeGrid implements SettingsPanel.Host {
         date.setTextSize(15); date.setTextColor(0xFF9DA9BC);
         LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(-1,-2); dl.topMargin=dp(4); dl.bottomMargin=dp(30); column.addView(date,dl);
         if(!favorites.isEmpty()) { addHeader("Your favorites",true); addTileGrid(favorites); }
-        if(!controls.isEmpty()) { addHeader("Inputs & settings",false); addCardRow(controls); }
         if(!apps.isEmpty()) { addHeader("More apps",false); addTileGrid(apps); }
+        if(!controls.isEmpty()) { addHeader("Inputs & settings",false); addCardRow(controls); }
     }
 
     /** Live TV first: one large tile, two banner cells wide, on its own row. */
