@@ -695,14 +695,15 @@ public class HomeGrid implements SettingsPanel.Host {
     private void style(View v, boolean focused) {
         if (!(v instanceof FrameLayout)) return;
         FrameLayout f = (FrameLayout) v;
+        f.animate().cancel();
         if (focused) {
             GradientDrawable ring = new GradientDrawable();
             ring.setCornerRadius(dp(8));
-            ring.setStroke(dp(2), look.ring);
+            ring.setStroke(dp(4), 0xFF6DE7FF);
             ring.setColor(Color.TRANSPARENT);
             f.setForeground(ring);
-            f.animate().scaleX(1.045f).scaleY(1.045f).setDuration(160).start();
-            f.setTranslationZ(dp(8));
+            f.animate().scaleX(1.10f).scaleY(1.10f).setDuration(180).start();
+            f.setTranslationZ(dp(16));
         } else {
             f.setForeground(outline());
             f.animate().scaleX(1f).scaleY(1f).setDuration(160).start();
