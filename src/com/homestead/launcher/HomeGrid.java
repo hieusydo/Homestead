@@ -529,8 +529,6 @@ public class HomeGrid implements SettingsPanel.Host {
                 return Integer.compare(x,y);
             }
         });
-        TextView brand=new OutfitTextView(ctx); brand.setText("H O M E S T E A D  /  O U T F I T");
-        brand.setTextSize(11); brand.setTextColor(0xFF90A3BB); column.addView(brand);
         int hour=java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
         TextView greeting=new OutfitTextView(ctx);
         greeting.setText(hour<12?"Good morning.":hour<18?"Good afternoon.":"Good evening.");
