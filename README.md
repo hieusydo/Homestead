@@ -2,6 +2,10 @@
 
 Custom Outfit edition with an Obsidian theme, five fixed favorites, compact input controls, and one-press Menu access to wallpaper settings. Package: `com.cleantv.outfit`, installed alongside the official app.
 
+![Homestead Outfit on an Insignia Fire TV, showing the Obsidian background, Outfit typography, five favorite apps, and input controls.](screenshots/outfit-home.png)
+
+Screenshot from the installed custom edition on an Insignia NS-50DF710NA21. Change the wallpaper with **Menu → Background**.
+
 See [custom build, install, and restore instructions](CUSTOM-README.md). The upstream documentation below describes the original edition; its layout and update instructions differ from this fork.
 
 ---
