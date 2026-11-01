@@ -68,6 +68,8 @@ public final class DebloatPanel {
 
         final List<Row> rows = new ArrayList<Row>();
 
+        p.addRow("Choose an app", "All installed apps", () -> host.showPanel(buildBrowser(c, host))).opens();
+
         // ------------------------------------------------------------------ bulk actions
         p.addHeader(c.getString(R.string.db_all_at_once));
 
@@ -335,10 +337,11 @@ public final class DebloatPanel {
     }
 
     private static View buildBrowser(final Context c, final SettingsPanel.Host host) {
-        final List<Debloat.Installed> all = Debloat.installed(c, true);
-        final Panel p = new Panel(c, c.getString(R.string.db_every_app),
+        final List<Debloat.Installed> all = Debloat.installed(c, false);
+        final Panel p = new Panel(c, "Every installed app",
                 c.getString(R.string.db_n_packages, all.size()));
 
+        p.addRow("App control connection", "Open Setup", () -> host.showPanel(SetupPanel.build(c, host))).opens();
         p.addText(c.getString(R.string.db_browser_text));
 
         final Panel.Row result = p.addStatus(c.getString(R.string.setup_last));

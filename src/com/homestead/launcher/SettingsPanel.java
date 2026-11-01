@@ -65,7 +65,8 @@ public final class SettingsPanel {
             public void onClick(View v) { host.showPanel(buildHome(c, host, summaries)); }
         });
         look.cell.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { host.showPanel(buildLook(c, host, summaries)); }
+            public void onClick(View v) { host.showPanel(OutfitBackgrounds.panel(c, host, summaries,
+                    () -> host.showPanel(buildLook(c, host, summaries)))); }
         });
 
         final Panel.Row lang = p.addRow(c.getString(R.string.set_lang), Lang.label(c), null);

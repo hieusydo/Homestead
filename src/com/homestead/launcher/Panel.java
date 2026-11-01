@@ -450,7 +450,7 @@ public class Panel {
     }
 
     private TextView text(String s, int sp, int color) {
-        TextView t = new TextView(ctx);
+        TextView t = new OutfitTextView(ctx);
         t.setText(s);
         t.setTextColor(color);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);

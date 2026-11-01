@@ -81,6 +81,7 @@ public class HomeGrid implements SettingsPanel.Host {
     private static final int NAME_H_DP = 20;
     private static final String NAME_TAG = "name";
 
+    private OutfitLayout outfit;
     private final Context ctx;
     private final Listener listener;
 
@@ -165,6 +166,7 @@ public class HomeGrid implements SettingsPanel.Host {
 
     public HomeGrid(Context c, Listener l) {
         this.ctx = c;
+        OutfitDefaults.initialize(c);
         this.listener = l;
 
         // Overridden so Back and Menu reach us before the focused child consumes them; a
@@ -186,16 +188,10 @@ public class HomeGrid implements SettingsPanel.Host {
                     }
                     return true;
                 }
-                // Menu hides the focused tile, matching the stock Fire TV launcher's
-                // convention (long-press also works). In Simple mode it hides nothing, and
-                // five presses in a row open Settings instead.
+                // Outfit opens Settings with one Menu press; long-press still hides a tile.
                 if (e.getKeyCode() == android.view.KeyEvent.KEYCODE_MENU && panels.isEmpty()) {
                     if (e.getAction() == android.view.KeyEvent.ACTION_UP) {
-                        if (!Prefs.simpleMode(ctx)) hideFocused();
-                        else if (menuTaps.tap()) {
-                            logOpen("Settings (Menu x" + MenuTaps.COUNT + ")");
-                            showPanel(SettingsPanel.build(ctx, panelHost));
-                        }
+                        showPanel(SettingsPanel.build(ctx, panelHost));
                     }
                     return true;
                 }
@@ -296,6 +292,13 @@ public class HomeGrid implements SettingsPanel.Host {
         hlp.leftMargin = dp(MARGIN_DP);
         root.addView(head, hlp);
 
+        outfit = new OutfitLayout(c, panelHost, column, clock, cellsByKey, new OutfitLayout.Callbacks() {
+            public View tile(AppModel.Item it) { return buildTile(it); }
+            public void pick(AppModel.Item it) {
+                if (listener != null && !opensPanel(it)) listener.onPick(it);
+                act(it);
+            }
+        });
         AppModel.ensureLoaded(c);
         Backgrounds.adoptSharedPhotoOnce(c);
         applyBackground();
@@ -337,7 +340,7 @@ public class HomeGrid implements SettingsPanel.Host {
         painted = state;
         look = p;
         root.setBackground(photo != null ? Backgrounds.photoDrawable(ctx, photo)
-                : Backgrounds.drawable(p));
+                : OutfitBackgrounds.drawable(ctx, p));
         paintText(clock);
         paintText(greet);
         paintText(date);
@@ -362,6 +365,8 @@ public class HomeGrid implements SettingsPanel.Host {
     // ---------------------------------------------------------------- public API
 
     public void updateClock() {
+        applyBackground();
+        if (outfit != null) outfit.tick();
         updateHead();
         int mode = Prefs.clockMode(ctx);
         if (mode == Prefs.CLOCK_OFF) { clock.setText(""); dateText.setText(""); return; }
@@ -397,6 +402,7 @@ public class HomeGrid implements SettingsPanel.Host {
 
     /** Greeting and date, each its own setting; the grid moves down while either shows. */
     private void updateHead() {
+        if (outfit != null) return;
         // The bar carries the clock and the date at the left, so the greeting steps aside.
         if (barShown) { head.setVisibility(View.GONE); return; }
         Date now = new Date();
@@ -431,6 +437,7 @@ public class HomeGrid implements SettingsPanel.Host {
 
     /** Focus for a fresh Home press: Live TV when it comes first, else as takeFocus(). */
     public void takeStartFocus() {
+        if (outfit != null && selectKey("app:com.amazon.firetv.youtube")) { keepAtTop(); return; }
         // The restore tile is the one thing worth seeing before anything else.
         if (AppModel.restorePopupLive() && selectKey(AppModel.RESTORE_KEY)) {
             scroll.scrollTo(0, 0);
@@ -744,8 +751,16 @@ public class HomeGrid implements SettingsPanel.Host {
         builtGen = layoutGen;
         updateClock();
         try {
-            buildTopBar();
-            buildSections();
+            if (outfit != null) {
+                head.setVisibility(View.GONE); topBar.setVisibility(View.GONE);
+                cellsByKey.clear(); rows.clear(); rowHeaders.clear(); pillsByKey.clear();
+                focusedCell = null; raisedRow = null; topTile = null; restoreSlot = null;
+                column.setPadding(dp(MARGIN_DP), dp(36), dp(MARGIN_DP), dp(MARGIN_DP));
+                outfit.build();
+            } else {
+                buildTopBar();
+                buildSections();
+            }
         } catch (Throwable t) {
             android.util.Log.e("Homestead", "grid build failed, drawing fallback", t);
             try { buildFallback(); } catch (Throwable ignored) { }
@@ -1449,6 +1464,7 @@ public class HomeGrid implements SettingsPanel.Host {
         cell.setOnLongClickListener(new View.OnLongClickListener() {
             // In Simple mode a held Select falls through to a normal click.
             public boolean onLongClick(View v) {
+                focusedKey = it.key();
                 return !Prefs.simpleMode(ctx) && hideFocused();
             }
         });
@@ -1538,6 +1554,7 @@ public class HomeGrid implements SettingsPanel.Host {
                 });
             }
         }
+        OutfitLayout.style(ctx, f, focused);
     }
 
     /**

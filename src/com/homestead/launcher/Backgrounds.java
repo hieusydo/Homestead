@@ -124,6 +124,8 @@ final class Backgrounds {
     }
 
     static Preset current(Context c) {
+        Preset custom = OutfitBackgrounds.current(c);
+        if (custom != null) return custom;
         String id = currentId(c);
         if (PHOTO_ID.equals(id)) return PHOTO_LOOK;
         for (int i = 0; i < PRESETS.length; i++) {
