@@ -1,5 +1,7 @@
 # Homestead Outfit
 
+Daily offline nature and abstract wallpapers are available under **Settings → Background → Change daily**. Choose a mixed, nature-only, or abstract-only collection.
+
 Custom Outfit edition inspired by CleanYourTV Aurora, with a colorful wallpaper, five favorite apps, focused app names, and compact Inputs / Wi-Fi / Settings buttons. Package: `com.cleantv.outfit`, installed alongside the official app.
 
 ![Homestead Outfit on an Insignia Fire TV, showing the Aurora background, focused app name, five favorite apps, and top-right controls.](screenshots/outfit-home.png)

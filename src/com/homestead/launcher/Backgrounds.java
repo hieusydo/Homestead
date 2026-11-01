@@ -65,7 +65,42 @@ final class Backgrounds {
     };
 
     /** The setting value for the photo: the slot after the last preset. */
-    static final int PHOTO = PRESETS.length;
+    static final int PHOTO = 5; // Persisted ID: never move when adding backgrounds.
+    static final int ART_FIRST = 6;
+    static final int DAILY_NATURE = 14, DAILY_ABSTRACT = 15, DAILY_MIX = 16;
+    static final String[] ART_NAMES = { "Alpine mist", "Forest dusk", "Desert moon", "Ocean quiet",
+            "Indigo silk", "Jade flow", "Plum haze", "Amber orbit" };
+    static final String[] COLLECTIONS = { "Nature + abstract", "Nature", "Abstract" };
+
+    static int dailyArt(int mode, java.util.Calendar date) {
+        // Use the local calendar date, not elapsed 24-hour intervals (DST-safe).
+        java.util.GregorianCalendar utc = new java.util.GregorianCalendar(java.util.TimeZone.getTimeZone("UTC"));
+        utc.clear();
+        utc.set(date.get(java.util.Calendar.YEAR), date.get(java.util.Calendar.MONTH),
+                date.get(java.util.Calendar.DAY_OF_MONTH));
+        long day = utc.getTimeInMillis() / 86400000L;
+        int count = mode == DAILY_MIX ? 8 : 4;
+        int n = (int) ((day % count + count) % count);
+        // Mixed alternates between nature and abstract each day.
+        return mode == DAILY_MIX ? n / 2 + (n % 2) * 4
+                : n + (mode == DAILY_ABSTRACT ? 4 : 0);
+    }
+
+    static int artIndex(Context c) {
+        int id = Prefs.background(c);
+        if (id >= DAILY_NATURE && id <= DAILY_MIX)
+            return dailyArt(id, java.util.Calendar.getInstance());
+        return id >= ART_FIRST && id < DAILY_NATURE ? id - ART_FIRST : -1;
+    }
+
+    static boolean daily(Context c) { int id = Prefs.background(c); return id >= 14 && id <= 16; }
+    static void setDaily(Context c, boolean enabled) {
+        Prefs.setBackground(c, enabled ? collectionMode(c) : ART_FIRST + Math.max(0, artIndex(c)));
+    }
+    static int collectionMode(Context c) {
+        int n = Prefs.wallpaperCollection(c);
+        return n == 1 ? DAILY_NATURE : n == 2 ? DAILY_ABSTRACT : DAILY_MIX;
+    }
     /** The photo's text and ring colours, and its look until the photo has loaded. */
     static final Preset PHOTO_LOOK =
             new Preset("Photo", 0xFF000000, 0xFF000000, 0xFFFFFFFF, 0xFFE6E6E6, EDGE);
@@ -87,6 +122,9 @@ final class Backgrounds {
     private Backgrounds() { }
 
     static Preset current(Context c) {
+        int art = artIndex(c);
+        if (art >= 0) return new Preset(ART_NAMES[art], 0xFF09131F, 0xFF172535,
+                0xFFFFFFFF, 0xFF6DE7FF, EDGE);
         int i = Prefs.background(c);
         if (i == PHOTO) return PHOTO_LOOK;
         if (i < 0 || i > PHOTO) i = 0;
@@ -98,11 +136,12 @@ final class Backgrounds {
     /** The next choice in the Settings cycle: the presets, then the photo. */
     static int next(Context c) {
         int i = Prefs.background(c);
-        return (i >= PHOTO || i < 0) ? 0 : i + 1;
+        return (i >= DAILY_NATURE - 1 || i < 0) ? 0 : i + 1;
     }
 
     /** The value shown on the Settings row. */
     static String label(Context c) {
+        if (daily(c)) return "Daily · " + current(c).name;
         if (!photoChosen(c)) return current(c).name;
         return photoFile(c) != null ? "Photo" : "Photo (no file yet)";
     }

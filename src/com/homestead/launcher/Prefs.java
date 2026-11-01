@@ -129,6 +129,16 @@ public final class Prefs {
     public static boolean showNonTv(Context c) { return sp(c).getBoolean(K_SEC_NONTV, false); }
     public static void setShowNonTv(Context c, boolean v) { sp(c).edit().putBoolean(K_SEC_NONTV, v).apply(); }
 
+    public static int wallpaperCollection(Context c) { return sp(c).getInt("wallpaper_collection", 0); }
+    public static void setWallpaperCollection(Context c, int v) { sp(c).edit().putInt("wallpaper_collection", v).apply(); }
+    public static void initializeDailyWallpaper(Context c) {
+        if (sp(c).getBoolean("daily_wallpaper_v1", false)) return;
+        android.content.SharedPreferences.Editor e = sp(c).edit().putBoolean("daily_wallpaper_v1", true);
+        // Upgrade the default Aurora; preserve explicitly chosen photos and other looks.
+        if (background(c) == 1) e.putInt(K_BACKGROUND, Backgrounds.DAILY_MIX);
+        e.apply();
+    }
+
     /** Index into Backgrounds.PRESETS. */
     public static int background(Context c) { return sp(c).getInt(K_BACKGROUND, 1); }
     public static void setBackground(Context c, int v) { sp(c).edit().putInt(K_BACKGROUND, v).apply(); }

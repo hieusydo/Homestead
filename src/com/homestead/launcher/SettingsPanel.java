@@ -250,10 +250,31 @@ public final class SettingsPanel {
         final Panel p = new Panel(c, "Background", null, Panel.SHEET);
 
         final Panel.Row bg = p.addRow("Background", Backgrounds.label(c), null);
+        final Panel.Row daily = p.addRow("Change daily", Backgrounds.daily(c) ? "On" : "Off", null);
+        final Panel.Row collection = p.addRow("Daily collection",
+                Backgrounds.COLLECTIONS[Prefs.wallpaperCollection(c)], null);
+        daily.cell.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                Backgrounds.setDaily(c, !Backgrounds.daily(c));
+                daily.setValue(Backgrounds.daily(c) ? "On" : "Off");
+                bg.setValue(Backgrounds.label(c)); host.rebuildGrid(); changed.run();
+            }
+        });
+        collection.cell.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                Prefs.setWallpaperCollection(c, (Prefs.wallpaperCollection(c) + 1) % 3);
+                collection.setValue(Backgrounds.COLLECTIONS[Prefs.wallpaperCollection(c)]);
+                if (Backgrounds.daily(c)) Prefs.setBackground(c, Backgrounds.collectionMode(c));
+                bg.setValue(Backgrounds.label(c)); host.rebuildGrid(); changed.run();
+            }
+        });
+        daily.setHelp("A new offline wallpaper each local calendar day. Updates while Home is open, "
+                + "or the next time you return. Choosing a fixed background turns daily changes off.");
         final Panel.Row dim = p.addRow("Photo dimming", Backgrounds.dimLabel(c), null);
         bg.cell.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 Prefs.setBackground(c, Backgrounds.next(c));
+                daily.setValue("Off");
                 bg.setValue(Backgrounds.label(c));
                 host.rebuildGrid();
                 changed.run();

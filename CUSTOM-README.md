@@ -19,3 +19,8 @@ READ_LOGS is used for the Home redirect, as approved in this session. WRITE_SECU
 Favorites live in HomeGrid.java in the `order` array. Change that list and rebuild to alter their fixed order. Wallpaper is changeable in Settings without rebuilding. This is a maintained local fork; official Homestead releases will not update it automatically.
 
 The bundled Outfit file is a static regular-weight instance for reliable Android 9 rendering, derived from the Google Fonts variable font.
+
+## Daily backgrounds
+Settings → Background now offers **Change daily** and **Daily collection** (Nature + abstract, Nature, or Abstract). Eight original offline vector wallpapers include Alpine mist, Forest dusk, Desert moon, Ocean quiet, Indigo silk, Jade flow, Plum haze, and Amber orbit. Dark gradients protect the clock, top-right controls, app labels, and dock. No downloads, permissions, timers waking the TV, or photo storage are required.
+
+Rotation follows the TV's local calendar date, stays stable for that day, and updates on the next clock tick or return Home. Mixed rotation alternates nature and abstract. Turn Change daily off to keep today's artwork; selecting a fixed Background also stops rotation. Existing Aurora installations switch to daily mixed once on upgrade; custom photos and other selected looks are preserved. Photo remains saved setting ID 5 for compatibility.

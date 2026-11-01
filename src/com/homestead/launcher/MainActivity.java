@@ -52,6 +52,7 @@ public class MainActivity extends Activity implements HomeGrid.Listener {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         Prefs.applyOutfitUtilityVisibility(this);
+        Prefs.initializeDailyWallpaper(this);
         home = new HomeGrid(this, this);
         setContentView(home.root);
         home.takeStartFocus();
@@ -150,7 +151,11 @@ public class MainActivity extends Activity implements HomeGrid.Listener {
         HomeRedirectService.hideOverlay(1000L);
 
         if (!receiversOn) {
-            registerReceiver(tick, new IntentFilter(Intent.ACTION_TIME_TICK));
+            IntentFilter timeChanges = new IntentFilter(Intent.ACTION_TIME_TICK);
+            timeChanges.addAction(Intent.ACTION_DATE_CHANGED);
+            timeChanges.addAction(Intent.ACTION_TIME_CHANGED);
+            timeChanges.addAction(Intent.ACTION_TIMEZONE_CHANGED);
+            registerReceiver(tick, timeChanges);
             receiversOn = true;
         }
         if (home != null) home.updateClock();

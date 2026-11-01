@@ -226,6 +226,7 @@ public class HomeGrid implements SettingsPanel.Host {
         painted = state;
         look = p;
         root.setBackground(photo != null ? Backgrounds.photoDrawable(ctx, photo)
+                : Backgrounds.artIndex(ctx) >= 0 ? new ScenicWallpaper(Backgrounds.artIndex(ctx))
                 : "Aurora".equals(p.name) ? ctx.getResources().getDrawable(R.drawable.aurora_wallpaper) : Backgrounds.drawable(p));
         paintText(clock);
         for (int i = 0; i < column.getChildCount(); i++) {
@@ -248,6 +249,7 @@ public class HomeGrid implements SettingsPanel.Host {
     // ---------------------------------------------------------------- public API
 
     public void updateClock() {
+        applyBackground();
         int mode = Prefs.clockMode(ctx);
         if (mode == Prefs.CLOCK_OFF) { clock.setText(""); return; }
         String fmt = (mode == Prefs.CLOCK_12H) ? "h:mm a" : "HH:mm";
