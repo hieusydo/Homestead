@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.cleantv.outfit;
+package com.homestead.launcher;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -31,79 +31,65 @@ import android.util.Log;
 import java.io.File;
 
 /**
- * The home screen's background: a preset, or a photo copied into the app's own folder on
- * external storage, which needs no permission. Each look also sets the header and
- * focus-ring colours, since a dark ring vanishes on a dark background and white text on a
- * light one.
+ * The home screen's background: a preset, or a photo in the app's private storage, put
+ * there through BackgroundProvider (from a computer or from PhotoPanel). Each look also sets
+ * the header and focus-ring colours, since a dark ring vanishes on a dark background and
+ * white text on a light one.
+ *
+ * Up to 1.7.1 a photo was also read from the app's folder on shared storage. Any app with
+ * the storage permission can write there, so that folder is no longer read; a photo already
+ * in it is copied into private storage once (adoptSharedPhotoOnce).
  */
 final class Backgrounds {
 
     private static final String TAG = "Homestead";
 
     static final class Preset {
+        /** What the setting saves. Never change or reuse one: users' choices are stored as it. */
+        final String id;
         final String name;
         final int from, to;      // bottom-left to top-right; equal for a solid colour
         final int text;          // section headers and the clock
         final int ring;          // the focus ring around a tile
         /** A faint edge on every tile, so dark banners do not merge into a dark background. 0 for none. */
         final int outline;
-        Preset(String name, int from, int to, int text, int ring, int outline) {
-            this.name = name; this.from = from; this.to = to; this.text = text; this.ring = ring;
+        /** A soft glow in the middle fading to the edges, instead of the diagonal gradient. */
+        final boolean radial;
+        Preset(String id, String name, int from, int to, int text, int ring, int outline) {
+            this(id, name, from, to, text, ring, outline, false);
+        }
+        Preset(String id, String name, int from, int to, int text, int ring, int outline,
+                boolean radial) {
+            this.id = id; this.name = name; this.from = from; this.to = to; this.text = text; this.ring = ring;
             this.outline = outline;
+            this.radial = radial;
         }
     }
 
     private static final int EDGE = 0x3DFFFFFF;
 
-    /** Index 0 is the original look and the default. */
+    /**
+     * In the order the Settings page lists them. Index 0 is the original look and the default.
+     * The setting is saved by id, so presets can be added or moved without changing anyone's.
+     */
     static final Preset[] PRESETS = {
-            new Preset("Sky",      0xFF6991C7, 0xFFA3BDED, 0xFFFFFFFF, 0xFF2C2C2C, 0),
-            new Preset("Aurora", 0xFF080A0F, 0xFF182335, 0xFFFFFFFF, 0xFFE6EEF8, EDGE),
-            new Preset("Charcoal", 0xFF1A1B1F, 0xFF3A3C44, 0xFFFFFFFF, 0xFFE6E6E6, EDGE),
-            new Preset("Dusk",     0xFF2A1B3D, 0xFF6B3E7C, 0xFFFFFFFF, 0xFFF0E6F5, EDGE),
-            new Preset("Black",    0xFF000000, 0xFF000000, 0xFFFFFFFF, 0xFFE6E6E6, EDGE),
+            new Preset("sky",      "Sky",      0xFF6991C7, 0xFFA3BDED, 0xFFFFFFFF, 0xFF2C2C2C, 0),
+            new Preset("midnight", "Midnight", 0xFF0B1F38, 0xFF1D4E86, 0xFFFFFFFF, 0xFFE6EEF8, EDGE),
+            new Preset("charcoal", "Charcoal", 0xFF1A1B1F, 0xFF3A3C44, 0xFFFFFFFF, 0xFFE6E6E6, EDGE),
+            new Preset("dusk",     "Dusk",     0xFF2A1B3D, 0xFF6B3E7C, 0xFFFFFFFF, 0xFFF0E6F5, EDGE),
+            new Preset("black",    "Black",    0xFF000000, 0xFF000000, 0xFFFFFFFF, 0xFFE6E6E6, EDGE),
+            // Dark, with a faint glow in the middle rather than a flat black.
+            new Preset("ember",    "Ember",    0xFF35101F, 0xFF000000, 0xFFFFFFFF, 0xFFF0E6EA, EDGE, true),
+            new Preset("deepsea",  "Deep sea", 0xFF08303A, 0xFF000000, 0xFFFFFFFF, 0xFFE6F0F2, EDGE, true),
+            // A flat dark navy, softer than black.
+            new Preset("night",    "Night",    0xFF0E1726, 0xFF0E1726, 0xFFE8EEF6, 0xFFFFFFFF, EDGE),
     };
 
-    /** The setting value for the photo: the slot after the last preset. */
-    static final int PHOTO = 5; // Persisted ID: never move when adding backgrounds.
-    static final int ART_FIRST = 6;
-    static final int DAILY_NATURE = 14, DAILY_ABSTRACT = 15, DAILY_MIX = 16;
-    static final String[] ART_NAMES = { "Alpine mist", "Forest dusk", "Desert moon", "Ocean quiet",
-            "Indigo silk", "Jade flow", "Plum haze", "Amber orbit" };
-    static final String[] COLLECTIONS = { "Nature + abstract", "Nature", "Abstract" };
-
-    static int dailyArt(int mode, java.util.Calendar date) {
-        // Use the local calendar date, not elapsed 24-hour intervals (DST-safe).
-        java.util.GregorianCalendar utc = new java.util.GregorianCalendar(java.util.TimeZone.getTimeZone("UTC"));
-        utc.clear();
-        utc.set(date.get(java.util.Calendar.YEAR), date.get(java.util.Calendar.MONTH),
-                date.get(java.util.Calendar.DAY_OF_MONTH));
-        long day = utc.getTimeInMillis() / 86400000L;
-        int count = mode == DAILY_MIX ? 8 : 4;
-        int n = (int) ((day % count + count) % count);
-        // Mixed alternates between nature and abstract each day.
-        return mode == DAILY_MIX ? n / 2 + (n % 2) * 4
-                : n + (mode == DAILY_ABSTRACT ? 4 : 0);
-    }
-
-    static int artIndex(Context c) {
-        int id = Prefs.background(c);
-        if (id >= DAILY_NATURE && id <= DAILY_MIX)
-            return dailyArt(id, java.util.Calendar.getInstance());
-        return id >= ART_FIRST && id < DAILY_NATURE ? id - ART_FIRST : -1;
-    }
-
-    static boolean daily(Context c) { int id = Prefs.background(c); return id >= 14 && id <= 16; }
-    static void setDaily(Context c, boolean enabled) {
-        Prefs.setBackground(c, enabled ? collectionMode(c) : ART_FIRST + Math.max(0, artIndex(c)));
-    }
-    static int collectionMode(Context c) {
-        int n = Prefs.wallpaperCollection(c);
-        return n == 1 ? DAILY_NATURE : n == 2 ? DAILY_ABSTRACT : DAILY_MIX;
-    }
+    /** The setting value for the photo. */
+    static final String PHOTO_ID = "photo";
     /** The photo's text and ring colours, and its look until the photo has loaded. */
     static final Preset PHOTO_LOOK =
-            new Preset("Photo", 0xFF000000, 0xFF000000, 0xFFFFFFFF, 0xFFE6E6E6, EDGE);
+            new Preset(PHOTO_ID, "Photo", 0xFF000000, 0xFF000000, 0xFFFFFFFF, 0xFFE6E6E6, EDGE);
 
     private static final String[] FILES = { "background.jpg", "background.jpeg", "background.png" };
     /** Bigger files are ignored rather than decoded. */
@@ -121,29 +107,64 @@ final class Backgrounds {
 
     private Backgrounds() { }
 
-    static Preset current(Context c) {
-        int art = artIndex(c);
-        if (art >= 0) return new Preset(ART_NAMES[art], 0xFF09131F, 0xFF172535,
-                0xFFFFFFFF, 0xFF6DE7FF, EDGE);
-        int i = Prefs.background(c);
-        if (i == PHOTO) return PHOTO_LOOK;
-        if (i < 0 || i > PHOTO) i = 0;
-        return PRESETS[i];
+    /**
+     * Up to 1.6.4 the setting was a position in this list, the presets then the photo.
+     * Fixed for good: it is how a value saved then is read, whatever PRESETS holds now.
+     */
+    private static final String[] BY_OLD_POSITION =
+            { "sky", "midnight", "charcoal", "dusk", "black", PHOTO_ID };
+
+    /** The chosen look's id. A choice from before ids is read through its old position. */
+    static String currentId(Context c) {
+        String id = Prefs.backgroundId(c);
+        if (id != null) return id;
+        int i = Prefs.backgroundPosition(c);
+        // Out of range showed the default then too.
+        return (i >= 0 && i < BY_OLD_POSITION.length) ? BY_OLD_POSITION[i] : PRESETS[0].id;
     }
 
-    static boolean photoChosen(Context c) { return Prefs.background(c) == PHOTO; }
+    static Preset current(Context c) {
+        Preset custom = OutfitBackgrounds.current(c);
+        if (custom != null) return custom;
+        String id = currentId(c);
+        if (PHOTO_ID.equals(id)) return PHOTO_LOOK;
+        for (int i = 0; i < PRESETS.length; i++) {
+            if (PRESETS[i].id.equals(id)) return PRESETS[i];
+        }
+        return PRESETS[0];
+    }
 
-    /** The next choice in the Settings cycle: the presets, then the photo. */
-    static int next(Context c) {
-        int i = Prefs.background(c);
-        return (i >= DAILY_NATURE - 1 || i < 0) ? 0 : i + 1;
+    static boolean photoChosen(Context c) { return PHOTO_ID.equals(currentId(c)); }
+
+    /**
+     * Save a choice. Its old position is saved too where it had one, so going back to a
+     * version from before ids keeps it.
+     */
+    static void choose(Context c, String id) {
+        int old = -1;
+        for (int i = 0; i < BY_OLD_POSITION.length; i++) {
+            if (BY_OLD_POSITION[i].equals(id)) old = i;
+        }
+        Prefs.setBackground(c, id, old);
+    }
+
+    /** A look's name in the app's language: string bg_<id>, else its English name. */
+    static String name(Context c, Preset p) {
+        String n = displayName(c, p.id);
+        return n.equals(p.id) ? p.name : n;
+    }
+
+    /** String bg_<key> in the app's language, or the key itself when there is none. */
+    private static String displayName(Context c, String key) {
+        int id = c.getResources().getIdentifier("bg_" + key.toLowerCase(java.util.Locale.US),
+                "string", c.getPackageName());
+        return id == 0 ? key : c.getString(id);
     }
 
     /** The value shown on the Settings row. */
     static String label(Context c) {
-        if (daily(c)) return "Daily · " + current(c).name;
-        if (!photoChosen(c)) return current(c).name;
-        return photoFile(c) != null ? "Photo" : "Photo (no file yet)";
+        if (!photoChosen(c)) return name(c, current(c));
+        return c.getString(photoFile(c) != null ? R.string.bg_photo : R.string.bg_photo_none);
     }
 
     static int dimAlpha(Context c) {
@@ -153,25 +174,61 @@ final class Backgrounds {
 
     static String dimLabel(Context c) {
         int d = Prefs.photoDim(c);
-        return DIM_NAMES[(d < 0 || d >= DIM.length) ? 1 : d];
+        return displayName(c, "dim_" + DIM_NAMES[(d < 0 || d >= DIM.length) ? 1 : d]);
     }
 
-    /**
-     * The photo, or null: one received through BackgroundProvider (any Fire OS), else one
-     * pushed into the app's folder on external storage (Fire OS 7 only).
-     */
+    /** The photo received through BackgroundProvider, or null. Private storage only. */
     static File photoFile(Context c) {
         try {
             File own = BackgroundProvider.photoFile(c);
             if (own.isFile() && own.length() > 0) return own;
-            File dir = c.getExternalFilesDir(null);
-            if (dir == null) return null;
-            for (int i = 0; i < FILES.length; i++) {
-                File f = new File(dir, FILES[i]);
-                if (f.isFile() && f.length() > 0) return f;
-            }
         } catch (Throwable ignored) { }
         return null;
+    }
+
+    /**
+     * Once per install: a photo that 1.7.1 and earlier read from the app's folder on shared
+     * storage is copied into private storage, so nobody loses one, and that folder is never
+     * read again. A photo already in private storage is kept as it is.
+     */
+    static void adoptSharedPhotoOnce(Context c) {
+        if (Prefs.sharedPhotoAdopted(c)) return;
+        try {
+            File dest = BackgroundProvider.photoFile(c);
+            if (!(dest.isFile() && dest.length() > 0)) {
+                File dir = c.getExternalFilesDir(null);
+                for (int i = 0; dir != null && i < FILES.length; i++) {
+                    File f = new File(dir, FILES[i]);
+                    if (f.isFile() && f.length() > 0 && f.length() <= MAX_FILE) {
+                        copy(f, dest);
+                        Log.i(TAG, "background photo moved into private storage");
+                        break;
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "shared-storage photo not adopted: " + t);
+        }
+        Prefs.setSharedPhotoAdopted(c, true);
+    }
+
+    /** Through a temporary file, so a failed copy leaves no half photo. */
+    private static void copy(File src, File dest) throws java.io.IOException {
+        File part = new File(dest.getPath() + ".part");
+        java.io.FileInputStream in = new java.io.FileInputStream(src);
+        java.io.FileOutputStream out = new java.io.FileOutputStream(part);
+        try {
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        } finally {
+            try { in.close(); } catch (Throwable ignored) { }
+            try { out.close(); } catch (Throwable ignored) { }
+        }
+        if (!part.renameTo(dest)) {
+            part.delete();
+            throw new java.io.IOException("cannot rename " + part);
+        }
     }
 
     /** Identifies one version of the file, so a replaced photo is noticed. */
@@ -262,15 +319,20 @@ final class Backgrounds {
         return new LayerDrawable(new Drawable[]{ img, new ColorDrawable(a << 24) });
     }
 
-    /**
-     * Create the app's folder on external storage, so a custom background can be copied
-     * there with adb push. Android only creates it once something asks for it.
-     */
-    static void ensureFolder(Context c) {
-        try { c.getExternalFilesDir(null); } catch (Throwable ignored) { }
-    }
-
-    static Drawable drawable(Preset p) {
+    static GradientDrawable drawable(Preset p) {
+        if (p.radial) {
+            // The glow sits left of centre, behind the first tile; its reach follows the screen.
+            GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    new int[]{ p.from, p.to }) {
+                @Override protected void onBoundsChange(android.graphics.Rect r) {
+                    super.onBoundsChange(r);
+                    setGradientRadius(Math.max(r.width(), r.height()) * 0.78f);
+                }
+            };
+            g.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+            g.setGradientCenter(0.36f, 0.42f);
+            return g;
+        }
         return new GradientDrawable(GradientDrawable.Orientation.BL_TR,
                 new int[]{ p.from, p.to });
     }

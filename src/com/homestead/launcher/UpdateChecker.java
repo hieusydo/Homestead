@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.cleantv.outfit;
+package com.homestead.launcher;
 
 import android.content.Context;
 import android.os.Handler;
@@ -42,7 +42,7 @@ public final class UpdateChecker {
     private static final String TAG = "Homestead";
 
     /** owner/repo. One line to change if distribution moves to a dedicated releases repo. */
-    static final String REPO = "hieusydo/Homestead";
+    static final String REPO = "Sarg338/Homestead";
 
     private static final String API =
             "https://api.github.com/repos/" + REPO + "/releases/latest";
@@ -52,6 +52,8 @@ public final class UpdateChecker {
 
     private static final int CONNECT_TIMEOUT_MS = 8000;
     private static final int READ_TIMEOUT_MS = 12000;
+    /** Far more than a release's JSON ever is; a reply past this is not read any further. */
+    private static final int MAX_BODY_CHARS = 1024 * 1024;
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
@@ -108,17 +110,17 @@ public final class UpdateChecker {
                     int code = conn.getResponseCode();
                     Prefs.setLastUpdateCheck(app, System.currentTimeMillis());
                     if (code == 404 || code == 401) {
-                        err = "No release is available yet.";
+                        err = app.getString(R.string.upd_no_release);
                     } else if (code == 403) {
-                        err = "GitHub rate limit reached. Try again later.";
+                        err = app.getString(R.string.upd_rate_limit);
                     } else if (code != 200) {
-                        err = "GitHub returned HTTP " + code + ".";
+                        err = app.getString(R.string.upd_http, code);
                     } else {
-                        u = parse(app, read(conn.getInputStream()));
+                        u = parse(app, read(app, conn.getInputStream()));
                     }
                 } catch (Throwable t) {
                     Log.w(TAG, "update check failed: " + t);
-                    err = friendly(t);
+                    err = friendly(app, t);
                 } finally {
                     if (conn != null) try { conn.disconnect(); } catch (Throwable ignored) { }
                 }
@@ -206,21 +208,27 @@ public final class UpdateChecker {
 
     // ---------------------------------------------------------------- helpers
 
-    private static String read(InputStream in) throws Exception {
+    private static String read(Context c, InputStream in) throws Exception {
         BufferedReader r = new BufferedReader(new InputStreamReader(in, "UTF-8"));
         StringBuilder sb = new StringBuilder();
         char[] buf = new char[4096];
         int n;
-        while ((n = r.read(buf)) > 0) sb.append(buf, 0, n);
+        while ((n = r.read(buf)) > 0) {
+            sb.append(buf, 0, n);
+            if (sb.length() > MAX_BODY_CHARS) {
+                r.close();
+                throw new Exception(c.getString(R.string.upd_info_too_large));
+            }
+        }
         r.close();
         return sb.toString();
     }
 
-    private static String friendly(Throwable t) {
+    private static String friendly(Context c, Throwable t) {
         String m = String.valueOf(t.getMessage());
-        if (t instanceof java.net.UnknownHostException) return "No internet connection.";
-        if (t instanceof java.net.SocketTimeoutException) return "The update check timed out.";
-        return "Update check failed: " + m;
+        if (t instanceof java.net.UnknownHostException) return c.getString(R.string.upd_no_internet);
+        if (t instanceof java.net.SocketTimeoutException) return c.getString(R.string.upd_check_timeout);
+        return c.getString(R.string.upd_check_failed, m);
     }
 
     private static void post(final Callback cb, final Update u, final String err) {

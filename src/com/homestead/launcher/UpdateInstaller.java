@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.cleantv.outfit;
+package com.homestead.launcher;
 
 import android.content.Context;
 import android.content.Intent;
@@ -45,6 +45,13 @@ public final class UpdateInstaller {
     private static final String TAG = "Homestead";
     private static final int CONNECT_TIMEOUT_MS = 8000;
     private static final int READ_TIMEOUT_MS = 20000;
+    /**
+     * The server is trusted for what it sends, not for how much of the disk it may fill: the
+     * download stops a little past the size the release declared, or at this ceiling when
+     * it declared none.
+     */
+    private static final long MAX_DOWNLOAD_BYTES = 64L * 1024L * 1024L;
+    private static final long SIZE_SLACK_BYTES = 1024L * 1024L;
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
@@ -72,21 +79,21 @@ public final class UpdateInstaller {
             public void run() {
                 File apk = null;
                 try {
-                    status(p, "Downloading");
+                    status(p, app.getString(R.string.upd_downloading));
                     apk = download(app, u, p);
-                    if (apk == null || apk.length() == 0) { done(p, false, "Download failed."); return; }
+                    if (apk == null || apk.length() == 0) { done(p, false, app.getString(R.string.upd_download_failed)); return; }
 
-                    status(p, "Verifying");
+                    status(p, app.getString(R.string.upd_verifying));
                     if (!signatureMatches(app, apk)) {
                         apk.delete();
-                        done(p, false, "Update refused: its signature does not match this app.");
+                        done(p, false, app.getString(R.string.upd_bad_signature));
                         return;
                     }
                     install(app, apk, p);
                 } catch (Throwable t) {
                     Log.w(TAG, "update install failed: " + t);
                     if (apk != null) try { apk.delete(); } catch (Throwable ignored) { }
-                    done(p, false, friendly(t));
+                    done(p, false, friendly(app, t));
                 }
             }
         }, "homestead-update-install").start();
@@ -95,11 +102,12 @@ public final class UpdateInstaller {
     // ---------------------------------------------------------------- download
 
     private static File download(Context c, UpdateChecker.Update u, Progress p) throws Exception {
-        // Internal cache is enough: the tunnel streams the bytes to pm and the intent path
-        // serves them via UpdateFileProvider, so nothing needs world-readable storage.
+        // Internal cache only: the tunnel streams the bytes to pm and the intent path serves
+        // them via UpdateFileProvider, so nothing needs shared storage. Shared storage is also
+        // writable by other apps, which could swap the file after the signature check.
         File dir = c.getCacheDir();
-        if (dir == null) dir = c.getExternalCacheDir();
-        if (dir != null) dir.mkdirs();
+        if (dir == null) throw new Exception(c.getString(R.string.upd_no_cache));
+        dir.mkdirs();
         File out = new File(dir, "homestead-update.apk");
         if (out.exists()) out.delete();
 
@@ -108,10 +116,12 @@ public final class UpdateInstaller {
         conn.setRequestProperty("User-Agent", "Homestead-Updater");
         conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
         conn.setReadTimeout(READ_TIMEOUT_MS);
+        boolean complete = false;
         try {
             int code = conn.getResponseCode();
             if (code != 200) throw new Exception("HTTP " + code + " while downloading the update");
             long total = u.apkSize > 0 ? u.apkSize : conn.getContentLength();
+            long limit = u.apkSize > 0 ? u.apkSize + SIZE_SLACK_BYTES : MAX_DOWNLOAD_BYTES;
             InputStream in = conn.getInputStream();
             FileOutputStream fos = new FileOutputStream(out);
             try {
@@ -120,8 +130,11 @@ public final class UpdateInstaller {
                 int n;
                 int lastPct = -1;
                 while ((n = in.read(buf)) > 0) {
-                    fos.write(buf, 0, n);
                     got += n;
+                    if (got > limit) {
+                        throw new Exception(c.getString(R.string.upd_too_large));
+                    }
+                    fos.write(buf, 0, n);
                     if (total > 0) {
                         int pct = (int) (got * 100L / total);
                         if (pct != lastPct) { progress(p, pct); lastPct = pct; }
@@ -130,12 +143,15 @@ public final class UpdateInstaller {
                     }
                 }
                 fos.flush();
+                complete = true;
             } finally {
                 try { fos.close(); } catch (Throwable ignored) { }
                 try { in.close(); } catch (Throwable ignored) { }
             }
         } finally {
             conn.disconnect();
+            // A cut-off or oversized download is not left behind in the cache.
+            if (!complete) try { out.delete(); } catch (Throwable ignored) { }
         }
         return out;
     }
@@ -181,13 +197,13 @@ public final class UpdateInstaller {
         // Replacing the app ends this process; BootReceiver reopens it if this was us.
         Prefs.setUpdateStarted(c, System.currentTimeMillis());
         if (AdbBridge.canRun(c)) {
-            status(p, "Installing through the tunnel");
+            status(p, c.getString(R.string.upd_installing_tunnel));
             AdbBridge.installApk(apk, new AdbBridge.Callback() {
                 public void onDone(boolean ok, String output) {
                     // Reaching here means the replace has not stopped us yet, or it failed.
                     boolean success = ok && output != null && output.contains("Success");
                     if (success) {
-                        done(p, true, "Installed. Homestead will restart on the new version.");
+                        done(p, true, c.getString(R.string.upd_installed));
                     } else {
                         Log.w(TAG, "tunnel install did not report success: " + output);
                         installViaIntent(c, apk, p, output);
@@ -219,9 +235,9 @@ public final class UpdateInstaller {
             c.startActivity(i);
         } catch (Throwable t) {
             String base = prevErr != null && prevErr.trim().length() > 0
-                    ? "Install failed: " + firstLine(prevErr)
-                    : "Could not open the installer.";
-            done(p, false, base + " Set up the on-device tunnel for a one-tap install.");
+                    ? c.getString(R.string.upd_install_failed, firstLine(prevErr))
+                    : c.getString(R.string.upd_no_installer);
+            done(p, false, base + " " + c.getString(R.string.upd_tunnel_hint));
         }
     }
 
@@ -233,10 +249,10 @@ public final class UpdateInstaller {
         return (nl > 0 ? s.substring(0, nl) : s).trim();
     }
 
-    private static String friendly(Throwable t) {
-        if (t instanceof java.net.UnknownHostException) return "No internet connection.";
-        if (t instanceof java.net.SocketTimeoutException) return "The download timed out.";
-        return "Update failed: " + t.getMessage();
+    private static String friendly(Context c, Throwable t) {
+        if (t instanceof java.net.UnknownHostException) return c.getString(R.string.upd_no_internet);
+        if (t instanceof java.net.SocketTimeoutException) return c.getString(R.string.upd_download_timeout);
+        return c.getString(R.string.upd_failed, t.getMessage());
     }
 
     private static void progress(final Progress p, final int pct) {

@@ -13,4 +13,7 @@ export HOMESTEAD_KEYPASS
 if [ ! -f "$HOMESTEAD_KEYSTORE" ]; then
  keytool -genkeypair -keystore "$HOMESTEAD_KEYSTORE" -alias outfit -storepass "$HOMESTEAD_KEYPASS" -keypass "$HOMESTEAD_KEYPASS" -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=CleanTV Local Outfit"
 fi
-bash build.sh
+python3 outfit/prepare-build.py
+export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -Djava.awt.headless=true"
+(cd .outfit-build && bash build.sh)
+cp .outfit-build/homestead.apk homestead.apk

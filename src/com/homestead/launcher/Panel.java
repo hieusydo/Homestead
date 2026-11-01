@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.cleantv.outfit;
+package com.homestead.launcher;
 
 import android.content.Context;
 import android.graphics.Color;
@@ -51,6 +51,8 @@ public class Panel {
     private static final int HEAD = 0xFF7FA8D8, ROW_BG = 0x10FFFFFF, PANE_BG = 0x12FFFFFF;
     private static final int FOCUS_BG = 0xFFE8EEF6, FOCUS_TEXT = 0xFF0B1F38;
     private static final int DEFAULT_VALUE = 0xFFA7D28F;
+    /** The outline of a row picked up to be moved. */
+    private static final int LIFT = 0xFF2E7BD6;
 
     public final FrameLayout root;
     private final Context ctx;
@@ -109,6 +111,20 @@ public class Panel {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         list.addView(sv, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        // A sheet's help sits under the list and grows with the focused row's text. The D-pad
+        // scroll toward that row is worked out before the new help is laid out, so a longer
+        // help can then cover the row. When the list's height changes, scroll again to it;
+        // a new scroll replaces the one still running.
+        final ScrollView scroller = sv;
+        sv.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            public void onLayoutChange(View v, int l, int t, int r, int b,
+                                       int ol, int ot, int or, int ob) {
+                if (b - t == ob - ot) return;
+                scroller.post(new Runnable() {
+                    public void run() { keepFocusedInView(scroller); }
+                });
+            }
+        });
 
         helpTitle = text("", 19, TEXT);
         helpTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
@@ -379,6 +395,18 @@ public class Panel {
 
     // ---------------------------------------------------------------- explanation
 
+    /** Scroll just enough to show the focused row whole, if part of it is out of view. */
+    private void keepFocusedInView(ScrollView s) {
+        Row f = focused;
+        if (f == null || !f.cell.hasFocus()) return;
+        android.graphics.Rect rc = new android.graphics.Rect(0, 0, f.cell.getWidth(), f.cell.getHeight());
+        s.offsetDescendantRectToMyCoords(f.cell, rc);
+        int top = s.getScrollY() + s.getPaddingTop();
+        int bottom = s.getScrollY() + s.getHeight() - s.getPaddingBottom();
+        int delta = rc.bottom > bottom ? rc.bottom - bottom : rc.top < top ? rc.top - top : 0;
+        if (delta != 0) s.smoothScrollBy(0, delta);
+    }
+
     private void showHelp(Row r) {
         String body = r.help != null ? r.help
                 : (r.section != null && r.section.help != null) ? r.section.help : null;
@@ -508,7 +536,7 @@ public class Panel {
         private final TextView chevron;
         private final Section section;
         private int valueColor = DEFAULT_VALUE;
-        private boolean focused, isSwitch, status;
+        private boolean focused, isSwitch, status, lifted;
         private String help;
 
         Row(Panel panel, View cell, TextView label, TextView value, TextView badge,
@@ -548,9 +576,25 @@ public class Panel {
         /** Draw an "on"/"off" value as a switch; other values still show as text. */
         public Row asSwitch() { isSwitch = true; paint(); return this; }
 
+        /** Picked up to be moved: outlined until put down. */
+        public void setLifted(boolean l) {
+            lifted = l;
+            paint();
+        }
+
         /** Mark a row that opens another page. */
         public Row opens() {
             if (chevron != null) chevron.setVisibility(View.VISIBLE);
+            return this;
+        }
+
+        /** A small sample before the label, for a row that picks a look. */
+        public Row setSwatch(android.graphics.drawable.Drawable d) {
+            View s = new View(panel.ctx);
+            s.setBackground(d);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(panel.dp(36), panel.dp(24));
+            lp.rightMargin = panel.dp(14);
+            ((LinearLayout) label.getParent()).addView(s, 0, lp);
             return this;
         }
 
@@ -563,6 +607,7 @@ public class Panel {
             GradientDrawable bg = new GradientDrawable();
             bg.setCornerRadius(panel.dp(12));
             bg.setColor(focused ? FOCUS_BG : ROW_BG);
+            if (lifted) bg.setStroke(panel.dp(3), LIFT);
             cell.setBackground(bg);
 
             label.setTextColor(focused ? FOCUS_TEXT : TEXT);

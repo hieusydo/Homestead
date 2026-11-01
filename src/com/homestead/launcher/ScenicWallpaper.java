@@ -1,4 +1,4 @@
-package com.cleantv.outfit;
+package com.homestead.launcher;
 
 import android.graphics.*;
 import android.graphics.drawable.Drawable;

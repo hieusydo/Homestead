@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.cleantv.outfit;
+package com.homestead.launcher;
 
 import android.accessibilityservice.AccessibilityService;
 import android.content.BroadcastReceiver;
@@ -53,6 +53,7 @@ public class HomeRedirectService extends AccessibilityService {
 
     private static final String TAG = "Homestead";
     private static final String AMAZON = "com.amazon.tv.launcher";
+    private static final String SYSTEM_UI = "com.android.systemui";
 
     /** Ignores duplicate window events from a single transition. */
     private static final long DEBOUNCE_MS = 350L;
@@ -71,6 +72,12 @@ public class HomeRedirectService extends AccessibilityService {
      * the app's first frame, so lifting at once shows Amazon's home in between.
      */
     private static final long REVEAL_MS = 400L;
+    /**
+     * After Amazon's Settings starts opening, how long its HOME start and launcher windows
+     * are not taken for Home. They follow within a fraction of a second; a real Home press
+     * from the system still counts during it.
+     */
+    private static final long SETTINGS_MS = 3000L;
 
     private static HomeRedirectService instance;
 
@@ -149,6 +156,30 @@ public class HomeRedirectService extends AccessibilityService {
 
     public static void clearLiveActivity(MainActivity a) {
         if (liveActivity != null && liveActivity.get() == a) liveActivity = null;
+    }
+
+    /** The language was changed from a panel in context c: every window reads its text again. */
+    static void languageChanged(Context c) {
+        Lang.apply(c);
+        // The system tiles' names are set when the model loads, so load it in the new language.
+        AppModel.reload(c);
+        HomeRedirectService s = instance;
+        if (s != null) {
+            Lang.apply(s);
+            if (s.home != null) s.home.rebuild();
+        }
+        MainActivity a = (liveActivity == null) ? null : liveActivity.get();
+        if (a != null) {
+            Lang.apply(a);
+            a.rebuildGrid();
+        }
+    }
+
+    /** A system change (the TV's language, say) resets our resources; keep the user's choice. */
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration conf) {
+        super.onConfigurationChanged(conf);
+        Lang.apply(this);
     }
 
     /** True only if the pick happened in the same epoch as the activity now resuming. */
@@ -262,14 +293,66 @@ public class HomeRedirectService extends AccessibilityService {
      * too; other uids, such as Settings during boot, do not.
      */
     private void onHomeKey(int uid) {
+        // Fire OS 8 opens Settings by starting HOME from the settings app, then the
+        // launcher's own settings page: not a Home press.
+        if (isSettingsUid(uid)) {
+            enterSettings("settings app started HOME on its way to Settings");
+            return;
+        }
         boolean system = uid == android.os.Process.SYSTEM_UID || uid == 0;
+        // A real press (from the system) always counts, even while Settings is opening.
+        if (!system && SystemClock.elapsedRealtime() < settingsUntil) return;
+        if (system) settingsUntil = 0L;
         if (!system && !isForegroundApp(uid)) return;
         long now = SystemClock.elapsedRealtime();
         // A deliberate Home press ends any pause, such as the Amazon Home tile's.
         suspendUntil = 0L;
         lastShow = now;
         Log.i(TAG, "Home pressed");
+        // A press while the overlay is still up goes back to the grid; attach() leaves an
+        // attached overlay as it is.
+        if (attached != null && home != null) {
+            home.closePanels();
+            if (!home.isPanelOpen()) home.takeStartFocus();
+        }
         attach();
+    }
+
+    /** Amazon's settings app, and its uid once looked up. */
+    private static final String SETTINGS_PKG = "com.amazon.tv.settings.v2";
+    private int settingsUid = -1;
+    /** Until then, Amazon home windows and HOME starts are the way into Settings: no redirect. */
+    private long settingsUntil;
+
+    private boolean isSettingsUid(int uid) {
+        if (settingsUid < 0) {
+            try {
+                settingsUid = getPackageManager().getApplicationInfo(SETTINGS_PKG, 0).uid;
+            } catch (Throwable t) {
+                return false;
+            }
+        }
+        return uid == settingsUid;
+    }
+
+    /** A settings page of Amazon's (in its settings app or its launcher) is coming up. */
+    private static boolean isSettingsWindow(CharSequence pkg, CharSequence cls) {
+        if (pkg != null && pkg.toString().startsWith("com.amazon.tv.settings")) return true;
+        return AMAZON.contentEquals(pkg) && cls != null && cls.toString().contains("Settings");
+    }
+
+    /**
+     * Stand down for Settings: no redirect for a few seconds, no queued handoff, and an
+     * overlay that is up is lifted so the settings page shows.
+     */
+    private void enterSettings(String why) {
+        settingsUntil = SystemClock.elapsedRealtime() + SETTINGS_MS;
+        cancelPendingOpen();
+        if (attached != null) {
+            Log.i(TAG, why + ", removing overlay");
+            cancelHide();
+            revealSoon();
+        }
     }
 
     private boolean isForegroundApp(int uid) {
@@ -329,6 +412,7 @@ public class HomeRedirectService extends AccessibilityService {
         @Override public void onInputAdded(String id) { queueChange("input:" + id); }
         @Override public void onInputRemoved(String id) { queueChange("input:" + id); }
         @Override public void onInputUpdated(String id) { queueChange("input:" + id); }
+        @Override public void onInputStateChanged(String id, int state) { queueChange("input:" + id); }
     };
 
     private void queueChange(String what) {
@@ -345,6 +429,7 @@ public class HomeRedirectService extends AccessibilityService {
         super.onServiceConnected();
         if (home != null) return;               // guard against a second connect
         instance = this;
+        Lang.apply(this);
         Prefs.setHomeOffByUser(this, false);
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         // Before the first load, so an input that registers during it is still noticed.
@@ -380,21 +465,40 @@ public class HomeRedirectService extends AccessibilityService {
     private void scheduleBootMaintenance() {
         if (!Prefs.adbEnabled(this) || !Prefs.reapplyOnBoot(this)) return;
         if (!AdbCrypto.hasKey(this)) return;
+        // Until this has run, the restore tile leaves out what it is about to fix itself.
+        AppModel.setAutoFixPending(true);
         handler.postDelayed(new Runnable() {
             public void run() {
                 java.util.Set<String> want = Prefs.disabledByUs(HomeRedirectService.this);
-                if (want.isEmpty()) return;
                 java.util.List<String> cmds = new java.util.ArrayList<String>();
                 for (String pkg : want) {
+                    // A risky one (Amazon's launcher) is never switched off unattended: a
+                    // system update can change what Home depends on, so the user decides,
+                    // from the restore tile.
+                    if (Debloat.isRisky(pkg)) continue;
                     if (Debloat.stateOf(HomeRedirectService.this, pkg) == Debloat.ENABLED) {
                         cmds.add(AdbBridge.disableCommand(pkg));
                     }
                 }
-                if (cmds.isEmpty()) return;
+                if (cmds.isEmpty()) {
+                    finishBootMaintenance();
+                    return;
+                }
                 Log.i(TAG, "boot maintenance: re-disabling " + cmds.size() + " package(s)");
-                AdbBridge.run(cmds.toArray(new String[cmds.size()]), null);
+                AdbBridge.run(cmds.toArray(new String[cmds.size()]), new AdbBridge.Callback() {
+                    public void onDone(boolean ok, String out) { finishBootMaintenance(); }
+                });
             }
         }, 45000L);
+    }
+
+    /** What is still on after the unattended pass is for the restore tile to offer. */
+    private void finishBootMaintenance() {
+        AppModel.setAutoFixPending(false);
+        AppModel.reload(this);
+        if (home != null) home.rebuild();
+        MainActivity a = (liveActivity == null) ? null : liveActivity.get();
+        if (a != null) a.rebuildGrid();
     }
 
     @Override
@@ -611,6 +715,7 @@ public class HomeRedirectService extends AccessibilityService {
             if (a == null) return;
             // Read live: the user can keep moving and scrolling during the hold.
             a.applyState(home.getSelectedKey(), home.getScrollY(), home.getRowScrollX());
+            a.adoptPanels(home);
         } catch (Throwable t) { }
     }
 
@@ -648,7 +753,19 @@ public class HomeRedirectService extends AccessibilityService {
         if (e.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
         CharSequence p = e.getPackageName();
         if (p == null) return;
+        // System UI's panels, such as the volume bar, sit over whatever is in front without
+        // replacing it: not a sign that another app came up. Its screens (the USB debugging
+        // prompt) still count, so the cover does not hide them.
+        if (SYSTEM_UI.contentEquals(p)) {
+            CharSequence c = e.getClassName();
+            if (c == null || !c.toString().endsWith("Activity")) return;
+        }
         lastForeground = p.toString();
+
+        if (isSettingsWindow(p, e.getClassName())) {
+            enterSettings("Amazon settings in front");
+            return;
+        }
 
         // Another app took the screen: remove the overlay so it does not cover it.
         if (!AMAZON.contentEquals(p)) {
@@ -665,13 +782,16 @@ public class HomeRedirectService extends AccessibilityService {
             if ((!ours || ourHdmi) && attached != null) {
                 Log.i(TAG, "foreground is now " + p + ", removing overlay");
                 cancelHide();
+                // The overlay is going; a queued handoff firing before it does would put
+                // the home screen back over the app that just came up.
+                cancelPendingOpen();
                 revealSoon();
             }
             return;
         }
 
         long now = SystemClock.elapsedRealtime();
-        if (now < suspendUntil) return;
+        if (now < suspendUntil || now < settingsUntil) return;
 
         // Amazon's launcher can emit a second window event for a single Home press, so a
         // double press cannot be detected reliably; the "Amazon Home" tile is the way out.

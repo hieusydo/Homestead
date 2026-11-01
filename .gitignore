@@ -19,9 +19,9 @@ res/drawable-nodpi/
 # patches
 *.patch
 
-# Local build credentials and generated source lists
+# Outfit build staging and local credentials
+.outfit-build/
 *.keystore
 *.jks
-.env
-.env.*
+.env*
 classes.txt

@@ -10,13 +10,16 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.cleantv.outfit;
+package com.homestead.launcher;
 
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -36,10 +39,16 @@ public final class Prefs {
     private static final String K_SEC_NONTV = "sec_nontv";
     private static final String K_CLOCK = "clock";
     private static final String K_BACKGROUND = "background";
+    private static final String K_BACKGROUND_ID = "background_id";
     private static final String K_PHOTO_DIM = "photo_dim";
+    private static final String K_SHARED_PHOTO = "shared_photo_adopted";
     private static final String K_ADB = "adb_enabled";
     private static final String K_TUNNEL = "adb_tunnel_enabled";
     private static final String K_REAPPLY = "adb_reapply_on_boot";
+    private static final String K_RESTORE_WATCH = "restore_watch";
+    private static final String K_SHORTCUTS_PLACE = "shortcuts_place";
+    private static final String K_ROW_ORDER = "row_order";
+    private static final String K_SHORTCUTS = "shortcuts";
     private static final String K_DISABLED = "disabled_by_us";
     private static final String K_REFUSED = "refused_by_fire_os";
     private static final String K_HOME_OFF = "home_off_by_user";
@@ -52,6 +61,11 @@ public final class Prefs {
     private static final String K_UPD_AUTO = "update_auto_check";
     private static final String K_SIMPLE = "simple_mode";
     private static final String K_TV_FIRST = "livetv_first";
+    private static final String K_GREETING = "greeting";
+    private static final String K_DATE = "date_format";
+    private static final String K_NONTV_WIDE = "nontv_wide";
+    private static final String K_FIRE_ICONS = "fire_os_icons";
+    private static final String K_LANGUAGE = "language";
 
     public static final int SORT_LAST_USED = 0;
     public static final int SORT_ALPHA = 1;
@@ -60,26 +74,16 @@ public final class Prefs {
     public static final int CLOCK_12H = 1;
     public static final int CLOCK_OFF = 2;
 
+    public static final int DATE_OFF = 0;
+    /** Weekday, day and month, in the order the TV's language uses. */
+    public static final int DATE_LONG = 1;
+    /** The TV's short numeric date. */
+    public static final int DATE_SHORT = 2;
+
     private Prefs() { }
 
     private static SharedPreferences sp(Context c) {
         return c.getSharedPreferences(FILE, Context.MODE_PRIVATE);
-    }
-
-    /** Apply this TV's requested utility visibility once; Settings can restore it later. */
-    public static void applyOutfitUtilityVisibility(Context c) {
-        if (!sp(c).getBoolean("outfit_hide_airplay_v1", false)) {
-            setHidden(c,"app:com.apple.airplay.amazon.airplay",true);
-            sp(c).edit().putBoolean("outfit_hide_airplay_v1",true).apply();
-        }
-        if (sp(c).getBoolean("outfit_utility_visibility_v1", false)) return;
-        Set<String> keys = hidden(c);
-        keys.add("app:com.ghisler.android.TotalCommander");
-        keys.add("app:com.esaba.downloader");
-        // Restore the favorite affected by the old long-press focus bug.
-        keys.remove("app:com.amazon.firetv.youtube");
-        sp(c).edit().putStringSet(K_HIDDEN, keys)
-                .putBoolean("outfit_utility_visibility_v1", true).apply();
     }
 
     // ---------------------------------------------------------------- hidden tiles
@@ -116,7 +120,7 @@ public final class Prefs {
     public static void setSort(Context c, int v) { sp(c).edit().putInt(K_SORT, v).apply(); }
 
     public static int columns(Context c) {
-        int n = sp(c).getInt(K_COLUMNS, 5);
+        int n = sp(c).getInt(K_COLUMNS, 6);
         if (n < 4) n = 4;
         if (n > 8) n = 8;
         return n;
@@ -126,26 +130,29 @@ public final class Prefs {
     public static boolean showInputs(Context c) { return sp(c).getBoolean(K_SEC_INPUTS, true); }
     public static void setShowInputs(Context c, boolean v) { sp(c).edit().putBoolean(K_SEC_INPUTS, v).apply(); }
 
-    public static boolean showNonTv(Context c) { return sp(c).getBoolean(K_SEC_NONTV, false); }
+    public static boolean showNonTv(Context c) { return sp(c).getBoolean(K_SEC_NONTV, true); }
     public static void setShowNonTv(Context c, boolean v) { sp(c).edit().putBoolean(K_SEC_NONTV, v).apply(); }
 
-    public static int wallpaperCollection(Context c) { return sp(c).getInt("wallpaper_collection", 0); }
-    public static void setWallpaperCollection(Context c, int v) { sp(c).edit().putInt("wallpaper_collection", v).apply(); }
-    public static void initializeDailyWallpaper(Context c) {
-        if (sp(c).getBoolean("daily_wallpaper_v1", false)) return;
-        android.content.SharedPreferences.Editor e = sp(c).edit().putBoolean("daily_wallpaper_v1", true);
-        // Upgrade the default Aurora; preserve explicitly chosen photos and other looks.
-        if (background(c) == 1) e.putInt(K_BACKGROUND, Backgrounds.DAILY_MIX);
+    /** A Backgrounds.Preset id or Backgrounds.PHOTO_ID; null if the choice predates ids. */
+    public static String backgroundId(Context c) { return sp(c).getString(K_BACKGROUND_ID, null); }
+    /** How 1.6.4 and earlier saved it: a position in that version's list (0, Sky, if unset). */
+    public static int backgroundPosition(Context c) { return sp(c).getInt(K_BACKGROUND, 0); }
+    /** The id, and the old position too unless it is -1 (a look those versions did not have). */
+    public static void setBackground(Context c, String id, int oldPosition) {
+        SharedPreferences.Editor e = sp(c).edit().putString(K_BACKGROUND_ID, id);
+        if (oldPosition >= 0) e.putInt(K_BACKGROUND, oldPosition);
         e.apply();
     }
-
-    /** Index into Backgrounds.PRESETS. */
-    public static int background(Context c) { return sp(c).getInt(K_BACKGROUND, 1); }
-    public static void setBackground(Context c, int v) { sp(c).edit().putInt(K_BACKGROUND, v).apply(); }
 
     /** Index into Backgrounds.DIM_NAMES. Light by default, so labels stay readable. */
     public static int photoDim(Context c) { return sp(c).getInt(K_PHOTO_DIM, 1); }
     public static void setPhotoDim(Context c, int v) { sp(c).edit().putInt(K_PHOTO_DIM, v).apply(); }
+
+    /** Whether a photo from the old shared-storage folder has been looked for once (1.7.2). */
+    public static boolean sharedPhotoAdopted(Context c) { return sp(c).getBoolean(K_SHARED_PHOTO, false); }
+    public static void setSharedPhotoAdopted(Context c, boolean v) {
+        sp(c).edit().putBoolean(K_SHARED_PHOTO, v).apply();
+    }
 
     public static int clockMode(Context c) { return sp(c).getInt(K_CLOCK, CLOCK_24H); }
     public static void setClockMode(Context c, int v) { sp(c).edit().putInt(K_CLOCK, v).apply(); }
@@ -181,7 +188,7 @@ public final class Prefs {
         sp(c).edit().putLong(K_UPDATE_STARTED, at).commit();   // must survive the replace
     }
 
-    public static boolean reapplyOnBoot(Context c) { return sp(c).getBoolean(K_REAPPLY, false); }
+    public static boolean reapplyOnBoot(Context c) { return sp(c).getBoolean(K_REAPPLY, true); }
     public static void setReapplyOnBoot(Context c, boolean v) {
         sp(c).edit().putBoolean(K_REAPPLY, v).apply();
     }
@@ -192,7 +199,7 @@ public final class Prefs {
     }
 
     /** Whether the first-run wizard has been completed or skipped. */
-    public static boolean onboarded(Context c) { return sp(c).getBoolean(K_ONBOARDED, true); }
+    public static boolean onboarded(Context c) { return sp(c).getBoolean(K_ONBOARDED, false); }
     public static void setOnboarded(Context c, boolean v) {
         sp(c).edit().putBoolean(K_ONBOARDED, v).apply();
     }
@@ -207,17 +214,128 @@ public final class Prefs {
     }
 
     /**
-     * Live TV first: a large Live TV tile on top, then TV apps, then inputs; Home lands on
-     * Live TV. Off by default; it only changes anything on a TV with a tuner.
+     * Live TV first: a large Live TV tile above the rows; Home lands on it. Off by default;
+     * it only changes anything on a TV with a tuner. Up to 1.7.1 it also put the TV apps
+     * above the inputs, which rowOrder() keeps for anyone who had it on.
      */
     public static boolean liveTvFirst(Context c) { return sp(c).getBoolean(K_TV_FIRST, false); }
     public static void setLiveTvFirst(Context c, boolean v) {
         sp(c).edit().putBoolean(K_TV_FIRST, v).apply();
     }
 
+    /** "Good evening" at the top left. Off by default. */
+    public static boolean greeting(Context c) { return sp(c).getBoolean(K_GREETING, false); }
+    public static void setGreeting(Context c, boolean v) { sp(c).edit().putBoolean(K_GREETING, v).apply(); }
+
+    /** The date at the top left, one of DATE_*. Off by default. */
+    public static int dateFormat(Context c) { return sp(c).getInt(K_DATE, DATE_OFF); }
+    public static void setDateFormat(Context c, int v) { sp(c).edit().putInt(K_DATE, v).apply(); }
+
+    /** Non-TV apps as banner-sized tiles built from their icon, as Fire TV's own home does. */
+    public static boolean nonTvWide(Context c) { return sp(c).getBoolean(K_NONTV_WIDE, false); }
+    public static void setNonTvWide(Context c, boolean v) { sp(c).edit().putBoolean(K_NONTV_WIDE, v).apply(); }
+
+    /** Amazon Home, Settings and TV Health use icons read from Fire OS's own apps. */
+    public static boolean fireOsIcons(Context c) { return sp(c).getBoolean(K_FIRE_ICONS, false); }
+    public static void setFireOsIcons(Context c, boolean v) { sp(c).edit().putBoolean(K_FIRE_ICONS, v).apply(); }
+    /** One of Lang.CODES; "" (the default) follows the TV's language. */
+    public static String language(Context c) { return sp(c).getString(K_LANGUAGE, ""); }
+    public static void setLanguage(Context c, String v) { sp(c).edit().putString(K_LANGUAGE, v).apply(); }
+
+    /**
+     * The Fire TV settings shortcuts: off, a row on the home screen (placed among the other
+     * rows by rowOrder), or buttons in the top bar. What is in them is shortcuts().
+     */
+    public static final int SHORTCUTS_OFF = 0;
+    public static final int SHORTCUTS_ROW = 1;
+    /** Up to 1.7.1, a row below the apps; read once into the row order, then a plain row. */
+    private static final int SHORTCUTS_BELOW_OLD = 2;
+    public static final int SHORTCUTS_BAR = 3;
+
+    public static int shortcutsPlace(Context c) {
+        int n = sp(c).getInt(K_SHORTCUTS_PLACE, SHORTCUTS_OFF);
+        if (n == SHORTCUTS_BELOW_OLD) {
+            if (!sp(c).contains(K_ROW_ORDER)) firstRowOrder(c);
+            return SHORTCUTS_ROW;
+        }
+        return (n < SHORTCUTS_OFF || n > SHORTCUTS_BAR) ? SHORTCUTS_OFF : n;
+    }
+    public static void setShortcutsPlace(Context c, int v) {
+        sp(c).edit().putInt(K_SHORTCUTS_PLACE, v).apply();
+    }
+
+    /** The home screen's rows, as rowOrder() names them. */
+    public static final String ROW_SHORTCUTS = "shortcuts", ROW_INPUTS = "inputs",
+            ROW_NONTV = "nontv", ROW_TV = "tv";
+    private static final String[] ROWS_USUAL = { ROW_SHORTCUTS, ROW_INPUTS, ROW_NONTV, ROW_TV };
+
+    /**
+     * The home screen's rows, top to bottom; every row once, shown or not, so a row switched
+     * off keeps its place. The restore tile and the Live TV first tile sit above them all.
+     */
+    public static List<String> rowOrder(Context c) {
+        String s = sp(c).getString(K_ROW_ORDER, null);
+        if (s == null) s = firstRowOrder(c);
+        List<String> out = new ArrayList<String>();
+        for (String k : s.split(",")) {
+            if (Arrays.asList(ROWS_USUAL).contains(k) && !out.contains(k)) out.add(k);
+        }
+        for (String k : ROWS_USUAL) if (!out.contains(k)) out.add(k);
+        return out;
+    }
+    public static void setRowOrder(Context c, List<String> order) {
+        StringBuilder b = new StringBuilder();
+        for (String k : order) b.append(b.length() == 0 ? "" : ",").append(k);
+        sp(c).edit().putString(K_ROW_ORDER, b.toString()).apply();
+    }
+    public static List<String> usualRowOrder() {
+        return new ArrayList<String>(Arrays.asList(ROWS_USUAL));
+    }
+
+    /**
+     * Up to 1.7.1 the order was fixed: Live TV first put the TV apps above the inputs, and the
+     * shortcuts row went above or below the apps. The first read keeps that layout.
+     */
+    private static String firstRowOrder(Context c) {
+        boolean below = sp(c).getInt(K_SHORTCUTS_PLACE, SHORTCUTS_OFF) == SHORTCUTS_BELOW_OLD;
+        String apps = liveTvFirst(c) ? "tv,inputs,nontv" : "inputs,nontv,tv";
+        String s = below ? apps + ",shortcuts" : "shortcuts," + apps;
+        SharedPreferences.Editor e = sp(c).edit().putString(K_ROW_ORDER, s);
+        if (below) e.putInt(K_SHORTCUTS_PLACE, SHORTCUTS_ROW);
+        e.apply();
+        return s;
+    }
+
+    /** Screen ids (FireTvSettingsPanel) in the row; the four that open from here until chosen. */
+    public static Set<String> shortcuts(Context c) {
+        Set<String> s = sp(c).getStringSet(K_SHORTCUTS, null);
+        if (s != null) return new HashSet<String>(s);
+        Set<String> d = new HashSet<String>();
+        d.add("network");
+        d.add("controllers");
+        d.add("applications");
+        d.add("device");
+        return d;
+    }
+    public static void setShortcut(Context c, String id, boolean on) {
+        Set<String> s = shortcuts(c);
+        if (on) s.add(id); else s.remove(id);
+        sp(c).edit().putStringSet(K_SHORTCUTS, s).apply();
+    }
+
+    /**
+     * Tell me when the system undoes my changes: after an update Fire OS can switch back on
+     * a package Debloat turned off, and a tile on top of the home screen offers to redo it.
+     * Off by default.
+     */
+    public static boolean restoreWatch(Context c) { return sp(c).getBoolean(K_RESTORE_WATCH, false); }
+    public static void setRestoreWatch(Context c, boolean v) {
+        sp(c).edit().putBoolean(K_RESTORE_WATCH, v).apply();
+    }
+
     // ---------------------------------------------------------------- updates
 
-    public static boolean autoUpdateCheck(Context c) { return sp(c).getBoolean(K_UPD_AUTO, false); }
+    public static boolean autoUpdateCheck(Context c) { return sp(c).getBoolean(K_UPD_AUTO, true); }
     public static void setAutoUpdateCheck(Context c, boolean v) {
         sp(c).edit().putBoolean(K_UPD_AUTO, v).apply();
     }

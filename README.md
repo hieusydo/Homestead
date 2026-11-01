@@ -1,17 +1,3 @@
-# Homestead Outfit
-
-Daily offline nature and abstract wallpapers are available under **Settings → Background → Change daily**. Choose a mixed, nature-only, or abstract-only collection.
-
-Custom Outfit edition inspired by CleanYourTV Aurora, with a colorful wallpaper, five favorite apps, focused app names, and compact Inputs / Wi-Fi / Settings buttons. Package: `com.cleantv.outfit`, installed alongside the official app.
-
-![Homestead Outfit on an Insignia Fire TV, showing the Aurora background, focused app name, five favorite apps, and top-right controls.](screenshots/outfit-home.png)
-
-Screenshot from the installed custom edition on an Insignia NS-50DF710NA21. Change the wallpaper with **Menu → Background**.
-
-See [custom build, install, and restore instructions](CUSTOM-README.md). The upstream documentation below describes the original edition; its layout and update instructions differ from this fork.
-
----
-
 # Homestead
 
 A replacement home screen for Fire TV: no advertising rows, no auto-playing trailers, no
@@ -27,7 +13,9 @@ Both pictures are from the same TV, a few minutes apart.
 ## What it does
 
 - **A home screen without the ads.** Your inputs, your TV apps and everything else, in
-  three sections. No sponsored rows, no auto-playing trailers, no promoted tiles.
+  three sections. No sponsored rows, no auto-playing trailers, no promoted tiles. **Row
+  order** (Settings → Home screen) puts the rows in the order you want, TV apps first for
+  example.
 - **The Home button comes here.** Pressing Home opens Homestead in about 170 ms instead of
   Amazon's home screen.
 - **HDMI and Composite inputs as tiles**, so switching source is one press from home.
@@ -38,6 +26,15 @@ Both pictures are from the same TV, a few minutes apart.
 - **Hide anything** you do not want to see: press MENU on a tile, or hold Select.
 - **Pick a background** in Settings: the blue gradient, a few darker ones, plain black for
   OLED screens and night viewing, or [your own photo](#your-own-background-photo).
+- **Optional extras** on the Settings → Home screen page, all off until you switch them on: a
+  greeting and the date at the top, non-TV apps as wide tiles, and Fire TV's own icons for
+  Amazon Home, Settings and TV Health.
+- **Fire TV's own settings screens** (Settings → Fire TV settings): Network, Controllers &
+  Bluetooth, Applications, My Fire TV, Equipment control, Help and the rest, each opened
+  straight from Homestead where the TV allows it, with optional shortcuts to them on the home
+  screen or in a bar at the top.
+- **In English, French or German**, following the TV's language, or pick one under Settings →
+  Language.
 - **Settings opens over the home screen**, so changes to the background, columns, clock and
   sections show behind it as you make them. Larger pages explain the selected row beside
   the list.
@@ -47,7 +44,9 @@ Both pictures are from the same TV, a few minutes apart.
 - **Debloat** switches off dozens of vetted Amazon packages, each with a plain-English
   description of what it does. Nothing is uninstalled and no data is deleted, and any
   package can be switched back on from the same page. A few packages are protected by
-  Fire OS and cannot be switched off by any app.
+  Fire OS and cannot be switched off by any app. On TVs where Home would then come
+  straight to Homestead (not Fire OS 7), Amazon's launcher itself can be switched off too;
+  it is marked risky, takes two presses and is never part of the one-press buttons.
 - **No computer needed.** The on-device tunnel lets the app switch on the Home button,
   grant itself the permissions it needs and run Debloat, all from the remote. It is off
   until you turn it on and shuts down when the work is done. A few commands from a
@@ -68,7 +67,7 @@ Real hardware, not emulators:
 | Amazon Fire TV Stick | `AFTSSS` | 7.7.1.6 | **Setup without a computer**: key approval, permissions, automatic shutdown of the tunnel |
 | Amazon Fire TV Stick 4K (2nd gen) | `AFTKM` | 8.1.8.5 | **Reported by a user, not tested here**: Home button, Debloat (28 packages switched off; Fire OS 8 protects a few more than Fire OS 7), several reboots, and a background photo sent from a computer (1.2.9). Set up from a computer. |
 | Hisense 65U65SFC Pro (Fire TV Edition) | `AFTCIBFBD1` | 8.1.8.0 | **Reported by a user, not tested here**: Home button, Debloat, a full reboot, and the fix for repeated package events (1.2.3 and later). Set up from a computer. |
-| TCL 40V5D (Fire TV Edition) | `AFTTIFB900` | 14 (build SL14SHIP1021.86N) | **Reported by a user, not tested here**: Home button, Debloat, TV Health, a full reboot, HDMI/Composite tiles, and setup from a computer. |
+| TCL 40V5D (Fire TV Edition) | `AFTTIFB900` | 14 (build SL14SHIP1021.86N) | **Reported by a user, not tested here**: Home button, Debloat, TV Health, a full reboot, HDMI/Composite tiles, and setup from a computer. Amazon's launcher switched off and back on, with Home going straight to Homestead after a reboot (1.6.11). |
 
 The first two run Android 9 and were tested by the maintainer. The last three are user
 reports: two on Fire OS 8 (Android 11), one on Fire OS 14. Other devices are *expected* to
@@ -129,7 +128,9 @@ The tunnel runs only while the app is making changes and shuts itself off afterw
 [SECURITY.md](SECURITY.md) explains what the app can access and what goes over the network.
 Some Amazon packages switch themselves back on after a restart; with **Re-apply after
 reboot** on (the default), Homestead switches them off again about a minute after the TV
-starts, which needs ADB debugging left on.
+starts, which needs ADB debugging left on. Firmware updates can also switch packages back
+on; with **Warn if the system undoes Debloat** on (off by default), the home screen shows a
+tile for ten seconds offering to switch them off again.
 
 If the Home button ever goes back to Amazon's home screen, for example after an update,
 select **Finish setup automatically** again. If you set Homestead up before version 1.2, run
@@ -175,8 +176,8 @@ adb push background.jpg /sdcard/Download/
 adb shell "content write --uri content://com.homestead.launcher.background/photo < /sdcard/Download/background.jpg"
 ```
 
-Then open Settings → **Background** and select the **Background** row until it says
-**Photo**. Any size or shape works: the picture
+Then open Settings → **Background** and select **Photo** in the list. Any size or shape
+works: the picture
 is scaled and cropped to fill the screen, and only that screen-sized copy is kept in
 memory. **Photo dimming** darkens it (Off, Light or Dark) so the labels stay readable;
 Light is the default.
@@ -189,9 +190,10 @@ Light is the default.
 - Run the second command on the TV, as shown, rather than piping the file from your
   computer (`adb shell "content write …" < background.jpg`): piped from a Windows computer,
   the file arrived damaged in testing.
-- On Fire OS 7 only, copying the file straight into Homestead's folder also works:
-  `adb push background.jpg /sdcard/Android/data/com.homestead.launcher/files/`. Fire OS 8
-  refuses that folder to adb. A picture sent with the commands above takes precedence.
+- Up to 1.7.1 a picture could also be copied straight into Homestead's folder on the TV's
+  shared storage. That folder is no longer read, because any app with the storage permission
+  can write to it. A picture already there is kept: the first time 1.7.2 starts it is copied
+  into Homestead's private storage.
 
 The picture is removed when Homestead is uninstalled.
 
@@ -227,7 +229,8 @@ Things to know before you leave the TV:
 
 1. Open **Debloat** and select **Undo everything this app switched off**. This switches
    back on exactly the packages Homestead turned off. Uninstalling the app does *not* do
-   this for you.
+   this for you. If you switched off Amazon's launcher, this step matters most: without
+   it the TV is left with no home screen until a computer switches the launcher back on.
 2. If you used the on-device tunnel, select **Forget our key** in Setup, then revoke the
    TV's copy under Settings → My Fire TV → Developer options, and turn ADB debugging off.
 3. Uninstall Homestead under Settings → Applications → Manage Installed Applications.
@@ -250,7 +253,8 @@ front, and covers it straight away.
 
 Fire OS holds back app launches for several seconds after a Home press, so Homestead shows
 its home screen as an overlay window, which is not held back. Its normal screen takes over
-once Fire OS allows it, keeping the selected tile and scroll position.
+once Fire OS allows it, keeping the selected tile, the scroll position and any page you
+opened, such as Settings.
 
 The overlay is an accessibility overlay, which needs no extra permission.
 
@@ -274,6 +278,9 @@ says exactly what is read.
 - **The Amazon Home tile pauses Homestead for 30 seconds.** After that, Homestead may take
   over again while you are still browsing Amazon's home screen. Pressing Home brings
   Homestead back at any time.
+- **On Fire OS 7, Back from a Settings page can land on Homestead.** Amazon's main Settings
+  screen there is a tab of its home screen, so going back to it from a page such as Network
+  looks the same as going home. Open Settings again to carry on.
 
 ## Building
 
@@ -285,6 +292,17 @@ No Gradle, no dependencies, under ten seconds:
 ./build.sh            # build + sign
 ./build.sh install    # and adb install -r
 ```
+
+On Windows without Git Bash, `build.ps1` does the same from PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build.ps1            # build + sign
+powershell -ExecutionPolicy Bypass -File build.ps1 install    # and adb install -r
+```
+
+The two scripts must make the same APK, byte for byte. After changing either one, run
+`tools/test-builds.sh` from Git Bash: it builds with each script, under Windows PowerShell
+and PowerShell 7, in a few different setups, and compares the results.
 
 Needs the Android SDK (`build-tools/36.1.0`, `platforms/android-34`) and a JDK. The signing
 key is **not** in this repository; `build.sh` looks for `~/.homestead-keys/` or the
@@ -375,6 +393,9 @@ Things that look like bugs but are Fire OS:
   Bypassing HOME key` in the log) and then start the home screen under their own uid, so a
   HOME start from the app in front counts as a press too. That hook needs an Amazon-only
   permission, so Homestead cannot use it for its own screens.
+- Amazon's Settings opens by starting the home screen under its own uid
+  (`com.amazon.tv.settings.v2`), then its settings page. That HOME start is not a press, and
+  for a few seconds after it Amazon's home windows do not bring Homestead back.
 - Fire OS refuses an ADB connection that starts on the TV itself; that is why the tunnel
   exists. The connection over Wi-Fi from a computer also drops often, so reconnect before
   each command when scripting.

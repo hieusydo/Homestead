@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.cleantv.outfit;
+package com.homestead.launcher;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -45,6 +45,9 @@ public class BootReceiver extends BroadcastReceiver {
         }
         // The user turned the Home button off: leave them on Amazon's home screen.
         if (Prefs.homeOffByUser(context)) return;
+
+        // Fire OS 6 only: bring up the log-watch Home fallback so Home works after a reboot.
+        HomeWatchService.startIfNeeded(context);
 
         // At boot, wait for the home stack, or Amazon's launcher starts after us and wins.
         // After an update Amazon's home is already up.

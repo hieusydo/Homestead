@@ -10,7 +10,7 @@
  * Public License for more details. You should have received a copy of the GNU General
  * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.cleantv.outfit;
+package com.homestead.launcher;
 
 import android.app.usage.UsageStats;
 import android.app.usage.UsageStatsManager;
@@ -21,9 +21,14 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
+import android.graphics.BitmapShader;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
+import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
@@ -57,12 +62,37 @@ public final class AppModel {
     public static final int TYPE_HEALTH = 4;
     /** Fire TV Live TV (antenna/cable tuner), started through Amazon's public TuneService. */
     public static final int TYPE_LIVETV = 5;
+    /** Offers to switch off again what a system update switched back on. */
+    public static final int TYPE_RESTORE = 6;
+    /**
+     * One of Amazon's settings screens, in the optional shortcuts row. cls holds its action,
+     * scId its id in FireTvSettingsPanel.SCREENS (null for the top bar's own pills).
+     */
+    public static final int TYPE_SHORTCUT = 7;
 
     static final String LIVETV_PKG = "com.amazon.tv.livetv";
     static final String LIVETV_SVC = "com.amazon.tv.livetv.TuneService";
     /** Item.key() of the Live TV tile; also how it is stored when hidden. */
     static final String LIVETV_KEY = "sys:livetv";
+    static final String RESTORE_KEY = "sys:restore";
+    /** Shortcut actions that are not an Amazon settings screen: the top bar's own two pills. */
+    static final String SC_MORE = "homestead:more";
+    static final String SC_SETTINGS = "homestead:settings";
     static final String AMAZON_LAUNCHER = "com.amazon.tv.launcher";
+    /** Apple AirPlay & HomeKit. Fire OS only lets its own Settings open it, so we fall back. */
+    static final String AIRPLAY_PKG = "com.apple.airplay.amazon.airplay";
+    /** Tiles Fire OS only lets its own Settings/home open; we fall back to pointing the way. */
+    static final String PROFILE_PICKER_PKG = "com.amazon.ftv.profilepicker";
+    static final String AMAZON_KIDS_PKG = "com.amazon.tahoe";
+    static final String WSIW_PKG = "com.amazon.vizzini.ftvcds";
+    /** Prime Video on Fire TV. */
+    static final String PRIME_VIDEO_PKG = "com.amazon.firebat";
+    /**
+     * Amazon's "FireTV Player", installed alongside Prime Video. It declares a launcher entry
+     * but opens no screen of its own, so its tile did nothing.
+     */
+    static final String FIRETV_PLAYER_PKG = "com.amazon.avod";
+    static final String AMAZON_SETTINGS = "com.amazon.tv.settings.v2";
     static final String AMAZON_HOME_CLS = "com.amazon.tv.launcher.ui.HomeActivity_vNext";
 
     /** Grid metrics: 32dp margins, 16dp gaps, 6 columns. */
@@ -80,6 +110,7 @@ public final class AppModel {
         public String pkg;
         public String cls;
         public String inputId;
+        public String scId;
         public String label;
         /**
          * Declares LEANBACK_LAUNCHER or has banner art. Many Fire OS apps declare only
@@ -89,11 +120,17 @@ public final class AppModel {
         public Bitmap banner;
         public Bitmap icon;
         public long lastUsed;
+        /** Inputs and Live TV: line icon (res/drawable), tinted in code; 0 if none. */
+        public int glyph;
+        /** Inputs: the TV reports a device on this input. */
+        public boolean connected;
 
         /** Stable across a re-sort; the handoff carries this, never an index. */
         public String key() {
             if (type == TYPE_INPUT) return "in:" + inputId;
             if (type == TYPE_LIVETV) return LIVETV_KEY;
+            if (type == TYPE_RESTORE) return RESTORE_KEY;
+            if (type == TYPE_SHORTCUT) return "sc:" + cls;
             if (type == TYPE_AMAZON_HOME) return "amz";
             if (type == TYPE_SETTINGS) return "sys:settings";
             if (type == TYPE_HEALTH) return "sys:health";
@@ -125,8 +162,17 @@ public final class AppModel {
         List<Item> out = new ArrayList<Item>(ITEMS.size());
         for (int i = 0; i < ITEMS.size(); i++) {
             Item it = ITEMS.get(i);
-            // Settings and TV Health are never hidden; they are the way to unhide.
-            if (it.type == TYPE_SETTINGS || it.type == TYPE_HEALTH) { out.add(it); continue; }
+            // Settings and TV Health are never hidden; they are the way to unhide. Nor is the
+            // restore tile, which only exists while there is something to put back, and only
+            // until its time on screen is up.
+            if (it.type == TYPE_RESTORE) {
+                if (restorePopupLive()) out.add(it);
+                continue;
+            }
+            if (it.type == TYPE_SETTINGS || it.type == TYPE_HEALTH) {
+                out.add(it);
+                continue;
+            }
             if (!hidden.contains(it.key())) out.add(it);
         }
         return out;
@@ -165,29 +211,55 @@ public final class AppModel {
         metrics(c);
         ITEMS.clear();
 
+        List<String> rev = reverted(c);
+        notePopup(rev.isEmpty() ? null : rev.toString());
+        if (!rev.isEmpty()) {
+            Item restore = new Item();
+            restore.type = TYPE_RESTORE;
+            restore.label = c.getString(R.string.home_restore);
+            ITEMS.add(restore);
+        }
+
         loadInputs(c);
 
-        Item amazon = new Item();
-        amazon.type = TYPE_AMAZON_HOME;
-        amazon.label = "Amazon Home";
-        amazon.icon = toBitmap(c, appIcon(c, AMAZON_LAUNCHER), ICON_PX, ICON_PX, false);
-        ITEMS.add(amazon);
+        // Fire OS icons are looked up by name, so a TV without one keeps the usual icon.
+        boolean fire = Prefs.fireOsIcons(c);
+        Drawable d;
+
+        // With Amazon's launcher switched off the tile would start nothing.
+        if (amazonLauncherOn(c)) {
+            Item amazon = new Item();
+            amazon.type = TYPE_AMAZON_HOME;
+            amazon.label = c.getString(R.string.home_amazon);
+            d = fire ? fireOsIcon(c, AMAZON_LAUNCHER, "ic_home") : null;
+            amazon.icon = toBitmap(c, d != null ? d : appIcon(c, AMAZON_LAUNCHER), ICON_PX, ICON_PX, false);
+            ITEMS.add(amazon);
+        }
 
         Item settings = new Item();
         settings.type = TYPE_SETTINGS;
-        settings.label = "Settings";
-        settings.icon = toBitmap(c, drawable(c, android.R.drawable.ic_menu_manage), ICON_PX, ICON_PX, false);
+        settings.label = c.getString(R.string.set_title);
+        d = fire ? fireOsIcon(c, AMAZON_LAUNCHER, "ic_settings_default_60dp") : null;
+        settings.icon = toBitmap(c, d != null ? d : drawable(c, android.R.drawable.ic_menu_manage), ICON_PX, ICON_PX, false);
         ITEMS.add(settings);
 
         Item health = new Item();
         health.type = TYPE_HEALTH;
-        health.label = "TV Health";
-        health.icon = toBitmap(c, drawable(c, android.R.drawable.ic_menu_info_details), ICON_PX, ICON_PX, false);
+        health.label = c.getString(R.string.set_health);
+        d = fire ? fireOsIcon(c, AMAZON_SETTINGS, "icon_device_margo") : null;
+        health.icon = toBitmap(c, d != null ? d : drawable(c, android.R.drawable.ic_menu_info_details), ICON_PX, ICON_PX, false);
         ITEMS.add(health);
+        d = null;
+        boolean wide = Prefs.nonTvWide(c);
+
+        loadShortcuts(c);
 
         PackageManager pm = c.getPackageManager();
         Set<String> seen = new HashSet<String>();
         String self = c.getPackageName();
+        // FireTV Player only stays off while Prime Video itself has a tile; a TV without the
+        // Prime Video app keeps it, in case it is the Prime Video app there.
+        boolean hidePlayer = launchable(pm, PRIME_VIDEO_PKG);
 
         // LEANBACK first so a package that declares both is classified as a TV app.
         String[] cats = { Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER };
@@ -204,6 +276,7 @@ public final class AppModel {
                 // Amazon's launcher is reached through the "Amazon Home" tile, which also
                 // stands the redirect down; listing it directly would just bounce back.
                 if (AMAZON_LAUNCHER.equals(ai.packageName)) continue;
+                if (hidePlayer && FIRETV_PLAYER_PKG.equals(ai.packageName)) continue;
                 if (!seen.add(ai.packageName)) continue;
 
                 Item a = new Item();
@@ -221,8 +294,18 @@ public final class AppModel {
                 // Icons are only shown when there is no banner, so only decode them then.
                 if (a.banner == null) {
                     Drawable ic = null;
-                    try { ic = ri.loadIcon(pm); } catch (Throwable t) { ic = null; }
-                    a.icon = toBitmap(c, ic, ICON_PX, ICON_PX, false);
+                    // A wide tile draws the icon at tile height: take the sharpest density the app ships.
+                    if (wide) {
+                        try {
+                            ic = pm.getResourcesForApplication(ri.activityInfo.applicationInfo)
+                                    .getDrawableForDensity(ri.getIconResource(), DisplayMetrics.DENSITY_XXXHIGH);
+                        } catch (Throwable t) { ic = null; }
+                    }
+                    if (ic == null) {
+                        try { ic = ri.loadIcon(pm); } catch (Throwable t) { ic = null; }
+                    }
+                    if (wide) a.banner = iconTile(c, ic, cellW, cellH);
+                    else a.icon = toBitmap(c, ic, ICON_PX, ICON_PX, false);
                     ic = null;
                 }
                 ITEMS.add(a);
@@ -238,8 +321,9 @@ public final class AppModel {
     }
 
     /**
-     * Whether changes to these packages could alter the grid: one of them is on it, or the
-     * launchable apps or HDMI inputs differ from the last load. Decodes no artwork.
+     * Whether changes to these packages could alter the grid: one of them is on it, one is
+     * something this app switched off (the restore tile), or the launchable apps or HDMI
+     * inputs differ from the last load. Decodes no artwork.
      */
     public static boolean affectsGrid(Context c, Set<String> changed) {
         if (!loaded) return true;
@@ -247,7 +331,119 @@ public final class AppModel {
             String p = ITEMS.get(i).pkg;
             if (p != null && changed.contains(p)) return true;
         }
+        // Most of what Debloat switches off is not on the grid, but switching it back on
+        // (or off again) brings the restore tile up or takes it away.
+        if (Prefs.restoreWatch(c)) {
+            Set<String> ours = Prefs.disabledByUs(c);
+            for (String p : changed) {
+                if (ours.contains(p)) return true;
+            }
+        }
         return !signature(c).equals(lastSignature);
+    }
+
+    /**
+     * Packages this app switched off that are on again, as after a system update. Empty
+     * unless the user asked to be told (Settings > System).
+     */
+    static List<String> reverted(Context c) {
+        List<String> out = new ArrayList<String>();
+        if (!Prefs.restoreWatch(c)) return out;
+        for (String pkg : Prefs.disabledByUs(c)) {
+            if (Debloat.stateOf(c, pkg) != Debloat.ENABLED) continue;
+            // Boot maintenance is about to switch these off again by itself.
+            if (autoFixPending && !Debloat.isRisky(pkg)) continue;
+            // Not offered where switching it off is blocked (Amazon's launcher on Fire OS 7).
+            if (Debloat.isRisky(pkg) && Debloat.isProtected(c, pkg)) continue;
+            out.add(pkg);
+        }
+        Collections.sort(out);
+        return out;
+    }
+
+    /** True from boot until the unattended re-disable pass has run (HomeRedirectService). */
+    private static volatile boolean autoFixPending = false;
+
+    static void setAutoFixPending(boolean pending) { autoFixPending = pending; }
+
+    /** How long the restore tile stays up once it is on screen, before it slides out. */
+    static final long RESTORE_SHOW_MS = 10000L;
+
+    /**
+     * The reverted set the restore tile is about, and the uptime its time on screen ends (0
+     * until a grid first shows it). One clock for both grids, so the overlay and the
+     * activity slide it out together. Kept in memory: the tile comes back for a new set, or
+     * after a restart.
+     */
+    private static String popupSet;
+    private static long popupUntil;
+
+    private static void notePopup(String set) {
+        if (set != null && set.equals(popupSet)) return;
+        popupSet = set;
+        popupUntil = 0;
+    }
+
+    /** The restore tile is owed time on screen: something to put back, and not yet timed out. */
+    static boolean restorePopupLive() {
+        return popupSet != null
+                && (popupUntil == 0 || android.os.SystemClock.uptimeMillis() < popupUntil);
+    }
+
+    /** The tile has been on screen somewhere, so its time is counting down. */
+    static boolean restoreClockRunning() { return popupUntil != 0; }
+
+    /** Start the shared clock the first time a grid shows the tile. @return ms left. */
+    static long startRestorePopup() {
+        long now = android.os.SystemClock.uptimeMillis();
+        if (popupUntil == 0) popupUntil = now + RESTORE_SHOW_MS;
+        return popupUntil - now;
+    }
+
+    /** The Fire TV settings shortcuts the user chose, when the row is switched on. */
+    private static void loadShortcuts(Context c) {
+        if (Prefs.shortcutsPlace(c) == Prefs.SHORTCUTS_OFF) return;
+        java.util.Set<String> want = Prefs.shortcuts(c);
+        List<String[]> screens = FireTvSettingsPanel.available(c, null);
+        for (int i = 0; i < screens.size(); i++) {
+            String[] s = screens.get(i);
+            if (!want.contains(s[FireTvSettingsPanel.ID])) continue;
+            Item it = new Item();
+            it.type = TYPE_SHORTCUT;
+            it.cls = s[FireTvSettingsPanel.ACTION];
+            it.scId = s[FireTvSettingsPanel.ID];
+            it.label = FireTvSettingsPanel.homeLabel(c, it.scId, false);
+            it.icon = ShortcutIcons.render(s[FireTvSettingsPanel.ID], ICON_PX);
+            ITEMS.add(it);
+        }
+    }
+
+    /** Whether the restore tile is in the model. */
+    public static boolean hasRestore() {
+        for (int i = 0; i < ITEMS.size(); i++) {
+            if (ITEMS.get(i).type == TYPE_RESTORE) return true;
+        }
+        return false;
+    }
+
+    /** Whether the package has an enabled launcher entry, the way the grid finds apps. */
+    private static boolean launchable(PackageManager pm, String pkg) {
+        String[] cats = { Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER };
+        for (int ci = 0; ci < cats.length; ci++) {
+            try {
+                Intent probe = new Intent(Intent.ACTION_MAIN);
+                probe.addCategory(cats[ci]);
+                probe.setPackage(pkg);
+                List<ResolveInfo> ris = pm.queryIntentActivities(probe, 0);
+                if (ris != null && !ris.isEmpty()) return true;
+            } catch (Throwable t) { }
+        }
+        return false;
+    }
+
+    /** False only when Amazon's launcher is present and switched off; unknown counts as on. */
+    static boolean amazonLauncherOn(Context c) {
+        return Debloat.stateOf(c, AMAZON_LAUNCHER) != Debloat.DISABLED;
     }
 
     /** Launchable activities and HDMI inputs, as a string to compare between loads. */
@@ -278,13 +474,15 @@ public final class AppModel {
                     if (info == null || !info.isPassthroughInput()) continue;
                     CharSequence lb = null;
                     try { lb = info.loadLabel(c); } catch (Throwable t) { }
-                    parts.add("in:" + info.getId() + "=" + lb);
+                    parts.add("in:" + info.getId() + "=" + lb + "/" + inputConnected(tim, info.getId()));
                 }
             }
         } catch (Throwable t) {
             parts.add("inputs failed");
         }
         if (liveTvAvailable(c)) parts.add("livetv");
+        if (amazonLauncherOn(c)) parts.add("amazonhome");
+        parts.add("reverted:" + reverted(c));
         Collections.sort(parts);
         return parts.toString();
     }
@@ -336,6 +534,7 @@ public final class AppModel {
             Item tv = new Item();
             tv.type = TYPE_LIVETV;
             tv.label = c.getString(R.string.home_livetv);
+            tv.glyph = R.drawable.ic_in_antenna;
             ITEMS.add(tv);
         }
         try {
@@ -351,10 +550,23 @@ public final class AppModel {
                 it.inputId = info.getId();
                 CharSequence lb = null;
                 try { lb = info.loadLabel(c); } catch (Throwable t) { }
-                it.label = (lb == null || lb.length() == 0) ? "Input" : lb.toString();
+                it.label = (lb == null || lb.length() == 0) ? c.getString(R.string.home_input) : lb.toString();
+                it.glyph = it.label.toUpperCase(Locale.US).startsWith("HDMI")
+                        ? R.drawable.ic_in_hdmi : R.drawable.ic_in_composite;
+                it.connected = inputConnected(tim, it.inputId);
                 ITEMS.add(it);
             }
         } catch (Throwable t) { }
+    }
+
+    /** INPUT_STATE_CONNECTED only; disconnected, or a state the TV can't tell, reads as not. */
+    private static boolean inputConnected(TvInputManager tim, String id) {
+        if (android.os.Build.VERSION.SDK_INT < 24) return false;
+        try {
+            return tim.getInputState(id) == TvInputManager.INPUT_STATE_CONNECTED;
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     private static Drawable drawable(Context c, int id) {
@@ -364,6 +576,124 @@ public final class AppModel {
     private static Drawable appIcon(Context c, String pkg) {
         try { return c.getPackageManager().getApplicationIcon(pkg); }
         catch (Throwable t) { return null; }
+    }
+
+    /**
+     * A drawable from another app's resources on this TV, by name; null if it has none.
+     * Tinted light: some are coloured by the owning app's theme, which we don't have.
+     */
+    private static Drawable fireOsIcon(Context c, String pkg, String name) {
+        try {
+            android.content.res.Resources r = c.getPackageManager().getResourcesForApplication(pkg);
+            int id = r.getIdentifier(name, "drawable", pkg);
+            if (id == 0) return null;
+            Drawable d = r.getDrawable(id).mutate();
+            d.setColorFilter(0xFFE6EEF8, android.graphics.PorterDuff.Mode.SRC_IN);
+            return d;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * A banner for an app that has none, the way Fire TV's own home draws one: the icon's art
+     * at full height, its outer columns stretched to the sides. An icon with a transparent
+     * edge (round, or a glyph) sits whole on a neutral card instead. One that is opaque at
+     * its edge but empty around its shape (a circle, Android's adaptive-icon mask) sits on a
+     * tile of its edge colour, the way every icon did before 1.9.0: stretching it would copy
+     * the empty corners out to the sides.
+     */
+    private static Bitmap iconTile(Context c, Drawable ic, int w, int h) {
+        // Drawn at up to twice the tile size and in its own shape, then scaled down: squeezed
+        // into an h x h square first, a wide icon (Amazon Photos ships a 1280x720 one) lost
+        // most of its pixels and came out blurred once stretched to fill the tile.
+        Bitmap icon = toBitmap(c, ic, 2 * w, 2 * h, false);
+        if (icon == null) return null;
+        try {
+            Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            Canvas cv = new Canvas(bmp);
+            Path clip = new Path();
+            float r = dp(c, CORNER_DP);
+            clip.addRoundRect(new RectF(0, 0, w, h), r, r, Path.Direction.CW);
+            cv.clipPath(clip);
+            Paint smooth = new Paint(Paint.FILTER_BITMAP_FLAG);
+            int edge = icon.getPixel(1, icon.getHeight() / 2);
+            // A round or transparent icon has no edge colour; use a neutral card instead.
+            if ((edge >>> 24) < 0x80) {
+                cv.drawColor(0xFF2A333D);
+                drawFitted(cv, icon, w, h, smooth);
+                return bmp;
+            }
+            // Fire TV's home fills the tile with the art: drop the icon's transparent margin
+            // and rounded corners, fit it to the tile height (wide art then covers the tile),
+            // and stretch its outer columns to the sides so no seam shows.
+            int iw = icon.getWidth(), ih = icon.getHeight();
+            int[] px = new int[iw * ih];
+            icon.getPixels(px, 0, iw, 0, 0, iw, ih);
+            Rect art = opaqueBounds(px, iw, ih);
+            // Rounded corners only reach the top and bottom rows; trimming the sides could cut
+            // into a logo that runs to the edge, which the stretch would then smear.
+            art.inset(0, Math.min(art.width(), art.height()) / 12);
+            // The columns to be stretched have to be opaque from top to bottom, or what is left
+            // of a corner's curve becomes a see-through strip beside the art. Step in past the
+            // rounding, but only a little: a shape that is empty around its edge (a circle, an
+            // adaptive icon's mask) would lose its sides, so it keeps a solid tile instead.
+            int limit = art.width() / 8;
+            int left = art.left, right = art.right;
+            while (left < art.left + limit && !opaqueColumn(px, iw, left, art.top, art.bottom)) left++;
+            while (right > art.right - limit && !opaqueColumn(px, iw, right - 1, art.top, art.bottom)) right--;
+            if (art.height() <= 0 || right - left < art.width() / 2
+                    || !opaqueColumn(px, iw, left, art.top, art.bottom)
+                    || !opaqueColumn(px, iw, right - 1, art.top, art.bottom)) {
+                cv.drawColor(edge | 0xFF000000);
+                drawFitted(cv, icon, w, h, smooth);
+                return bmp;
+            }
+            Bitmap core = Bitmap.createBitmap(icon, left, art.top, right - left, art.height());
+            float s = (float) h / core.getHeight();
+            Matrix m = new Matrix();
+            m.setScale(s, s);
+            m.postTranslate((w - core.getWidth() * s) / 2f, 0);
+            BitmapShader sh = new BitmapShader(core, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+            sh.setLocalMatrix(m);
+            smooth.setShader(sh);
+            cv.drawRect(0, 0, w, h, smooth);
+            if (core != icon) core.recycle();
+            return bmp;
+        } catch (Throwable t) {
+            return null;
+        } finally {
+            icon.recycle();
+        }
+    }
+
+    /** The icon whole, as large as fits, centred. */
+    private static void drawFitted(Canvas cv, Bitmap icon, int w, int h, Paint p) {
+        float k = Math.min((float) h / icon.getHeight(), (float) w / icon.getWidth());
+        float iw = icon.getWidth() * k, ih = icon.getHeight() * k;
+        cv.drawBitmap(icon, null, new RectF((w - iw) / 2f, (h - ih) / 2f, (w + iw) / 2f, (h + ih) / 2f), p);
+    }
+
+    /** The box around the pixels that are at least half opaque; the whole bitmap if none. */
+    private static Rect opaqueBounds(int[] px, int w, int h) {
+        int l = w, t = h, r = -1, btm = -1;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if ((px[y * w + x] >>> 24) < 0x80) continue;
+                if (x < l) l = x;
+                if (x > r) r = x;
+                if (y < t) t = y;
+                if (y > btm) btm = y;
+            }
+        }
+        return r < 0 ? new Rect(0, 0, w, h) : new Rect(l, t, r + 1, btm + 1);
+    }
+
+    /** Whether column x is at least half opaque on every row from top to bottom (exclusive). */
+    private static boolean opaqueColumn(int[] px, int w, int x, int top, int bottom) {
+        if (x < 0 || x >= w) return false;
+        for (int y = top; y < bottom; y++) if ((px[y * w + x] >>> 24) < 0x80) return false;
+        return true;
     }
 
     /**
@@ -441,9 +771,11 @@ public final class AppModel {
                 return x.label.compareToIgnoreCase(y.label);
             }
             private int rank(int t) {
+                if (t == TYPE_RESTORE) return -1;
                 if (t == TYPE_LIVETV) return 0;
                 if (t == TYPE_INPUT) return 1;
-                if (t == TYPE_AMAZON_HOME || t == TYPE_SETTINGS || t == TYPE_HEALTH) return 2;
+                if (t == TYPE_AMAZON_HOME || t == TYPE_SETTINGS || t == TYPE_HEALTH
+                        || t == TYPE_SHORTCUT) return 2;
                 return 3;
             }
         });

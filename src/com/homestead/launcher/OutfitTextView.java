@@ -1,4 +1,4 @@
-package com.cleantv.outfit;
+package com.homestead.launcher;
 import android.content.Context;
 import android.graphics.Typeface;
 import android.widget.TextView;
