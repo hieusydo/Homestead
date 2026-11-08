@@ -7,7 +7,9 @@ import android.view.View;
 final class OutfitBackgrounds {
     static final int DAILY_NATURE=14, DAILY_ABSTRACT=15, DAILY_MIX=16;
     static final String[] NAMES={"Alpine mist","Forest dusk","Desert moon","Ocean quiet",
-            "Indigo silk","Jade flow","Plum haze","Amber orbit"};
+            "Indigo silk","Jade flow","Plum haze","Amber orbit",
+            "Sunset canyon","Moonlit pines","Glacier peaks","Tropical islands",
+            "Solar eclipse","Prismatic glass","Cosmic constellation","Coral waves"};
     static final String[] MODES={"outfit_daily_mix","outfit_daily_nature","outfit_daily_abstract"};
     static final String[] COLLECTIONS={"Nature + abstract","Nature","Abstract"};
     static int artIndex(Context c) {
@@ -17,7 +19,7 @@ final class OutfitBackgrounds {
             return OutfitWallpaperSchedule.forDate(mode,java.util.Calendar.getInstance());
         }
         if(id.startsWith("outfit_art_")) try {
-            int n=Integer.parseInt(id.substring(11)); return n>=0 && n<8?n:-1;
+            int n=Integer.parseInt(id.substring(11)); return n>=0 && n<NAMES.length?n:-1;
         } catch(NumberFormatException ignored) { }
         return -1;
     }
@@ -58,7 +60,7 @@ final class OutfitBackgrounds {
             if(daily(c)) Backgrounds.choose(c,MODES[n]); refresh.run();
         });
         fixed.cell.setOnClickListener(v->{
-            int n=artIndex(c); Backgrounds.choose(c,n==7?"outfit_aurora":"outfit_art_"+(n+1)); refresh.run();
+            int n=artIndex(c); Backgrounds.choose(c,n==NAMES.length-1?"outfit_aurora":"outfit_art_"+(n+1)); refresh.run();
         });
         p.addRow("Other colors and custom photo","",standard).opens();
         p.addRow("Back","",()->host.closePanel());

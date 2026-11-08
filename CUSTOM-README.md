@@ -38,7 +38,7 @@ Resolve integration changes against the new upstream API. The boundary check cat
 
 ## Daily backgrounds
 
-Settings → Background offers Change daily and Daily collection (Nature + abstract, Nature, Abstract). Eight offline vector wallpapers include Alpine mist, Forest dusk, Desert moon, Ocean quiet, Indigo silk, Jade flow, Plum haze and Amber orbit. Dark gradients protect the clock, controls and dock. Mixed rotation alternates nature and abstract. Turn daily rotation off to keep today's artwork. Other colors and custom photo opens upstream's full background chooser.
+Settings → Background offers Change daily and Daily collection (Nature + abstract, Nature, Abstract). Sixteen offline vector wallpapers span mountains, forests, deserts, oceans, sunset canyons, moonlit pines, glaciers, tropical islands, flowing abstracts, an eclipse, prismatic glass, constellations and coral waves. Mixed rotation visits all sixteen before repeating; nature and abstract collections each contain eight. Existing artwork IDs remain stable. Dark gradients protect the clock, controls and dock. Mixed rotation alternates nature and abstract. Turn daily rotation off to keep today's artwork. Other colors and custom photo opens upstream's full background chooser.
 
 Rotation follows the TV's local date and refreshes on its minute tick or return Home. Existing numeric Outfit choices migrate once to namespaced IDs; custom photos, daily modes and fixed artworks retain their selections. No downloads, added permissions or wakeup timers are required.
 
@@ -50,4 +50,4 @@ Favorites remain YouTube, Netflix, HBO Max, ABC7, NBC Bay Area. Total Commander,
 
 ## Attribution
 
-Homestead code is GPL-3.0. Outfit is SIL OFL (`OUTFIT-LICENSE.txt`). Aurora wallpaper comes from [CleanYourTV Aurora](https://github.com/Gathin23/cleanyourtv/tree/main/themes/aurora) under MIT (`AURORA-LICENSE.txt`). The eight vector scenes are original artwork in this fork.
+Homestead code is GPL-3.0. Outfit is SIL OFL (`OUTFIT-LICENSE.txt`). Aurora wallpaper comes from [CleanYourTV Aurora](https://github.com/Gathin23/cleanyourtv/tree/main/themes/aurora) under MIT (`AURORA-LICENSE.txt`). The sixteen vector scenes are original artwork in this fork.
