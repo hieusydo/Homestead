@@ -16,19 +16,27 @@ Both pictures are from the same TV, a few minutes apart.
   three sections. No sponsored rows, no auto-playing trailers, no promoted tiles. **Row
   order** (Settings → Home screen) puts the rows in the order you want, TV apps first for
   example.
+- **Two designs** (Settings → Home screen → Design). **Classic** is the look above and the
+  default. **Dock** puts the first of your TV apps on a band at the bottom of the first
+  screen, with a glow in the selected app's colour and everything else in one grid below;
+  the clock and Settings sit in a bar at the top. **Dock size** sets how big its tiles are.
 - **The Home button comes here.** Pressing Home opens Homestead in about 170 ms instead of
   Amazon's home screen.
 - **HDMI and Composite inputs as tiles**, so switching source is one press from home.
 - **A Live TV tile** on TVs with a built-in tuner, while Amazon's Live TV app is switched
   on. It opens Live TV on the last channel you watched. **Live TV first** (Settings → Home
   screen) makes it a large tile at the top, and the Home button always lands on it.
-- **Apps in the order you use them**, counted on the TV itself.
-- **Hide anything** you do not want to see: press MENU on a tile, or hold Select.
+- **Apps in the order you use them**, counted on the TV itself, or A–Z. **Pin** the ones
+  you want first: press MENU on a tile (or hold Select) for its menu, then **Pin to front**
+  or **Move**. Pinned tiles lead their row in the order you set; the rest follow the sort.
+- **Hide anything** you do not want to see, from the same menu.
 - **Pick a background** in Settings: the blue gradient, a few darker ones, plain black for
-  OLED screens and night viewing, or [your own photo](#your-own-background-photo).
+  OLED screens and night viewing, eight built-in **landscapes** (four drawn, four photos),
+  or [your own photo](#your-own-background-photo).
 - **Optional extras** on the Settings → Home screen page, all off until you switch them on: a
-  greeting and the date at the top, non-TV apps as wide tiles, and Fire TV's own icons for
-  Amazon Home, Settings and TV Health.
+  greeting and the date at the top, non-TV apps as wide tiles, all apps in one row instead
+  of TV apps and the rest apart, and Fire TV's own icons for Amazon Home, Settings and TV
+  Health.
 - **Fire TV's own settings screens** (Settings → Fire TV settings): Network, Controllers &
   Bluetooth, Applications, My Fire TV, Equipment control, Help and the rest, each opened
   straight from Homestead where the TV allows it, with optional shortcuts to them on the home
@@ -154,6 +162,11 @@ To switch packages off, open **Commands for a computer** in the app: it lists ex
 commands still needed on your TV.
 
 ## Your own background photo
+
+Settings → Background → **Landscapes** lists eight pictures that ship with the app: four
+drawn, four photos (their sources are in [LANDSCAPES.md](LANDSCAPES.md)). One press makes one
+the background; **Photo dimming** applies to it too. A photo of your own, sent as below, is
+kept while a landscape is shown, and selecting **Photo** brings it back.
 
 ### From the TV, no computer
 
@@ -304,6 +317,10 @@ The two scripts must make the same APK, byte for byte. After changing either one
 `tools/test-builds.sh` from Git Bash: it builds with each script, under Windows PowerShell
 and PowerShell 7, in a few different setups, and compares the results.
 
+The build also draws the four `assets/landscape_drawn_*.jpg` pictures with
+`tools/MakeLandscapes.java` (from fixed seeds, so every build draws the same ones); they are
+not committed. The four photos beside them are.
+
 Needs the Android SDK (`build-tools/36.1.0`, `platforms/android-34`) and a JDK. The signing
 key is **not** in this repository; `build.sh` looks for `~/.homestead-keys/` or the
 `HOMESTEAD_KEYSTORE` / `HOMESTEAD_KEYPASS` environment variables (to make your own key,
@@ -324,7 +341,7 @@ comment explaining why it exists. Read it before changing the class.
 
 | Area | Classes |
 |---|---|
-| Home screen | `MainActivity`, `HomeGrid` (the UI, shared by the activity and the overlay), `AppModel` (tiles, artwork, order), `Backgrounds` (presets and the photo), `BackgroundProvider` (receives the photo over adb), `UsageTracker`, `HdmiActivity`, `BootReceiver` |
+| Home screen | `MainActivity`, `HomeGrid` (the UI, shared by the activity and the overlay), `AppModel` (tiles, artwork, order), `Backgrounds` (presets, the landscapes and the photo), `BackgroundProvider` (receives the photo over adb), `UsageTracker`, `HdmiActivity`, `BootReceiver` |
 | Home button | `HomeRedirectService` (accessibility service and overlay; its timings are deliberate), `HomeKeyWatcher` (Home presses, from the system log) |
 | Pages | `Panel` (the settings page: a sheet over the home screen, or a full page with an explanation pane), `OnboardingPanel` (first-run setup), `SetupPanel`, `SettingsPanel`, `HealthPanel` (TV Health), `DebloatPanel`, `CommandsPanel`, `UpdatePanel`, `PhotoPanel` (choose a photo on the TV) |
 | ADB | `AdbBridge` (one worker thread, link state, command batches), `AdbConnection` (the client), `AdbCrypto` (the key), `TunnelVpnService` and `VpnSetupActivity` (the on-device tunnel) |

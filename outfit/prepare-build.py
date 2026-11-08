@@ -8,13 +8,13 @@ root=Path(__file__).resolve().parents[1]
 stage=root/'.outfit-build'
 if stage.exists(): shutil.rmtree(stage)
 stage.mkdir()
-for name in ('src','res','tools'):
+for name in ('src','res','tools','assets'):
     shutil.copytree(root/name,stage/name)
 shutil.copy2(root/'build.sh',stage/'build.sh')
 manifest=(root/'AndroidManifest.xml').read_text()
 manifest=manifest.replace('com.homestead.launcher','com.cleantv.outfit')
 manifest=manifest.replace('android:label="Homestead"','android:label="Homestead Outfit"')
-manifest=re.sub(r'android:versionName="([^"]+)"',r'android:versionName="\1-outfit.3"',manifest)
+manifest=re.sub(r'android:versionName="([^"]+)"',r'android:versionName="\1-outfit.4"',manifest)
 (stage/'AndroidManifest.xml').write_text(manifest)
 for p in (stage/'src').rglob('*.java'):
     s=p.read_text().replace('package com.homestead.launcher;', 'package com.cleantv.outfit;')

@@ -60,6 +60,16 @@
   <string name="opt_wide_help">Like Fire TV\'s own home: each app\'s icon on a banner-sized tile, in a grid like the TV apps.</string>
   <string name="opt_fire">Fire TV system icons</string>
   <string name="opt_fire_help">Amazon Home, Settings and TV Health use the icons of Fire OS\'s own home and Settings, read from this TV. Where one is missing, the usual icon stays.</string>
+  <string name="opt_design">Design</string>
+  <string name="opt_design_help">Classic: the sections, each under its heading. Dock: the first of your TV apps, in their sort order, on a band at the bottom of the first screen, with a glow in the selected app\'s colour, everything else in one grid below, and the clock and Settings in a bar at the top.</string>
+  <string name="opt_design_classic">Classic</string>
+  <string name="opt_design_dock">Dock</string>
+  <string name="opt_dock_size">Dock size</string>
+  <string name="opt_dock_size_help">How big the tiles in the dock are. Fewer fit at the larger sizes.</string>
+  <string name="opt_dock_s">Small</string>
+  <string name="opt_dock_m">Medium</string>
+  <string name="opt_dock_l">Large</string>
+  <string name="opt_dock_xl">Extra large</string>
 
   <!-- Settings -->
   <string name="set_title">Settings</string>
@@ -89,7 +99,7 @@
   <string name="set_close">Close</string>
   <string name="set_back">Back</string>
   <string name="set_hidden">Hidden tiles</string>
-  <string name="set_hidden_note">Press the MENU button on any tile to hide it (long-press works too; not in Simple mode). Hiding only changes what this launcher draws - nothing is disabled or uninstalled, and the app still works everywhere else.</string>
+  <string name="set_hidden_note">Press MENU on a tile (or hold Select) for its menu: pin it to the front of its row, move it, or hide it. Not in Simple mode. Hiding only changes what this launcher draws - nothing is disabled or uninstalled, and the app still works everywhere else.</string>
   <string name="set_sort">Sort apps by</string>
   <string name="set_sort_az">A – Z</string>
   <string name="set_sort_last">Last used</string>
@@ -110,7 +120,7 @@
   <string name="set_photo_pick">Choose a photo on this TV</string>
   <string name="set_photo_pick_help">Lists the pictures in the TV\'s Download folder. Needs the on-device tunnel.</string>
   <string name="set_hidden_sub">Select one to show it on the home screen again</string>
-  <string name="set_hidden_none">Nothing is hidden. Press MENU on a tile (or long-press it) to hide it.</string>
+  <string name="set_hidden_none">Nothing is hidden. Press MENU on a tile (or hold Select) and choose Hide.</string>
   <string name="set_hidden_value">hidden</string>
   <string name="set_shown_value">shown</string>
   <string name="set_show_all">Show all hidden tiles</string>
@@ -468,6 +478,16 @@
   <string name="bg_ember">Ember</string>
   <string name="bg_deepsea">Deep sea</string>
   <string name="bg_list_help">Select one to use it. The home screen beside this page changes straight away.</string>
+  <string name="bg_landscapes">Landscapes</string>
+  <string name="bg_landscapes_help">Makes this landscape the background. A photo you sent is kept; choose \"Photo\" to go back to it. The dimming above applies here too.</string>
+  <string name="ls_drawn_dusk">Mountains at dusk</string>
+  <string name="ls_drawn_lake">Mountain lake</string>
+  <string name="ls_drawn_forest">Forest in the mist</string>
+  <string name="ls_drawn_dunes">Dunes</string>
+  <string name="ls_photo_ciucas">Ciucaș Peak, Romania</string>
+  <string name="ls_photo_crete">Mount Ida, Crete</string>
+  <string name="ls_photo_sanjuan">San Juan Valley</string>
+  <string name="ls_photo_scuol">Alps near Scuol</string>
   <string name="bg_black_help">Black is for OLED screens and night viewing.</string>
   <string name="bg_photo_help">Choose a picture saved on the TV below (needs the on-device tunnel), or send a JPEG or PNG from a computer:</string>
   <string name="bg_in_use">in use</string>
@@ -705,4 +725,25 @@
   <string name="ro_s_inputs">Inputs</string>
   <string name="ro_s_nontv">Non-TV apps</string>
   <string name="ro_s_tv">TV apps</string>
+
+  <!-- 2.1.0: the tile menu, pinned tiles, apps in one row -->
+  <string name="home_sec_apps">Apps</string>
+  <string name="tm_pin">Pin to front</string>
+  <string name="tm_pin_help">Pinned tiles come first in their row, in the order they were pinned. The rest of the row keeps the sort order.</string>
+  <string name="tm_unpin">Unpin</string>
+  <string name="tm_unpin_help">Back to its place in the sort order.</string>
+  <string name="tm_move">Move</string>
+  <string name="tm_move_help">Left and Right move it one place, Up and Down one line. OK or Back puts it down. A tile that is not pinned is pinned first.</string>
+  <string name="tm_hide">Hide</string>
+  <string name="tm_hide_help">Only this launcher stops drawing it; nothing is disabled or uninstalled. Hidden tiles are listed under Settings → Home screen.</string>
+  <string name="tm_moving">Moving %1$s: Left and Right move it, OK or Back puts it down.</string>
+  <string name="set_pinned">Pinned tiles</string>
+  <string name="set_pinned_sub">First in their row, in this order. Select one to unpin it.</string>
+  <string name="set_pinned_none">Nothing is pinned. Press MENU on a tile (or hold Select) and choose Pin to front.</string>
+  <string name="set_pinned_value">pinned</string>
+  <string name="set_unpinned_value">unpinned</string>
+  <string name="set_unpin_all">Unpin all</string>
+  <string name="set_apps_one">Apps in one row</string>
+  <string name="set_apps_one_help">TV apps and the other apps together in one grid, sorted as one list. The other apps get wide tiles made from their icons.</string>
+  <string name="ro_in_apps">in Apps</string>
 </resources>

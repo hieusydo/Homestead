@@ -7,6 +7,7 @@ import android.content.SharedPreferences;
 final class OutfitDefaults {
     static void initialize(Context c) {
         SharedPreferences p=c.getSharedPreferences("settings",Context.MODE_PRIVATE);
+        migrateDock(c, p);
         if (p.getBoolean("outfit_modular_v1",false)) return;
         SharedPreferences.Editor e=p.edit();
         if(!p.contains("columns")) e.putInt("columns",5);
@@ -30,5 +31,18 @@ final class OutfitDefaults {
             Prefs.setHidden(c,"app:com.apple.airplay.amazon.airplay",true);
             p.edit().putBoolean("outfit_hide_airplay_v1",true).apply();
         }
+    }
+    /** Adopt upstream settings once; subsequent user choices always win. */
+    private static void migrateDock(Context c, SharedPreferences p) {
+        if (p.getBoolean("outfit_upstream_dock_v1", false)) return;
+        if (!p.contains("home_design")) {
+            Prefs.setDesign(c, Prefs.DESIGN_DOCK);
+            Prefs.setSimpleMode(c, false); // Upstream Simple mode intentionally uses Classic.
+        }
+        if (!p.contains("shortcuts_place")) Prefs.setShortcutsPlace(c, Prefs.SHORTCUTS_BAR);
+        if (!p.contains("pinned")) Prefs.setPinned(c, java.util.Arrays.asList(
+                "app:com.amazon.firetv.youtube", "app:com.netflix.ninja", "app:com.hbo.hbonow",
+                "app:com.abclocal.kgo.tv.amazon", "app:com.nbcuni.nbcots.nbcbayarea.firetv"));
+        p.edit().putBoolean("outfit_upstream_dock_v1", true).apply();
     }
 }
