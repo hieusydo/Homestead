@@ -8,6 +8,18 @@ final class OutfitDefaults {
     static void initialize(Context c) {
         SharedPreferences p=c.getSharedPreferences("settings",Context.MODE_PRIVATE);
         migrateDock(c, p);
+        if (!p.getBoolean("outfit_header_v1",false)) {
+            SharedPreferences.Editor header=p.edit().putBoolean("greeting",true).putInt("date_format",1)
+                    .putBoolean("outfit_header_v1",true);
+            if(p.getInt("clock",1)==2) header.putInt("clock",1);
+            header.apply();
+        }
+        if (!p.getBoolean("outfit_four_app_dock_v1", false)) {
+            Prefs.setPinned(c, java.util.Arrays.asList("app:com.amazon.firetv.youtube", "app:com.netflix.ninja",
+                    "app:com.peacock.peacockfiretv", "app:com.abclocal.kgo.tv.amazon"));
+            Prefs.setDockSize(c, 1);
+            p.edit().putBoolean("outfit_four_app_dock_v1", true).apply();
+        }
         if (p.getBoolean("outfit_modular_v1",false)) return;
         SharedPreferences.Editor e=p.edit();
         if(!p.contains("columns")) e.putInt("columns",5);

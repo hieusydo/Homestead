@@ -124,7 +124,8 @@ final class Backgrounds {
     /** The chosen look's id. A choice from before ids is read through its old position. */
     static String currentId(Context c) {
         String id = Prefs.backgroundId(c);
-        if (id != null) return id;
+        if (OutfitRemoteWallpaper.selected(c) && OutfitRemoteWallpaper.file(c) != null) return PHOTO_ID;
+        if (id != null) return OutfitWallpaperSchedule.resolveId(id, java.util.Calendar.getInstance());
         int i = Prefs.backgroundPosition(c);
         // Out of range showed the default then too.
         return (i >= 0 && i < BY_OLD_POSITION.length) ? BY_OLD_POSITION[i] : PRESETS[0].id;
@@ -213,6 +214,7 @@ final class Backgrounds {
 
     /** The photo received through BackgroundProvider, or null. Private storage only. */
     static File photoFile(Context c) {
+        if (OutfitRemoteWallpaper.selected(c)) return OutfitRemoteWallpaper.file(c);
         try {
             File own = BackgroundProvider.photoFile(c);
             if (own.isFile() && own.length() > 0) return own;

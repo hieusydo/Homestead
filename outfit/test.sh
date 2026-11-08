@@ -7,6 +7,8 @@ trap 'rm -rf "$TEST_DIR"' EXIT
 "$JAVA_HOME/bin/java" -cp "$TEST_DIR" com.homestead.launcher.WallpaperTest
 "$JAVA_HOME/bin/javac" -cp "$TEST_DIR" -d "$TEST_DIR" outfit/tests/fakes/android/content/*.java outfit/tests/fakes/Prefs.java src/com/homestead/launcher/OutfitDefaults.java outfit/tests/DockMigrationTest.java
 "$JAVA_HOME/bin/java" -cp "$TEST_DIR" com.homestead.launcher.DockMigrationTest
+"$JAVA_HOME/bin/javac" -d "$TEST_DIR" src/com/homestead/launcher/OutfitRemotePolicy.java outfit/tests/RemotePolicyTest.java
+"$JAVA_HOME/bin/java" -cp "$TEST_DIR" com.homestead.launcher.RemotePolicyTest
 python3 outfit/check-boundary.py
 python3 - <<'PYTEST'
 import runpy

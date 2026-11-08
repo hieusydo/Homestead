@@ -9,11 +9,18 @@ final class OutfitBackgrounds {
     static final String[] NAMES={"Alpine mist","Forest dusk","Desert moon","Ocean quiet",
             "Indigo silk","Jade flow","Plum haze","Amber orbit",
             "Sunset canyon","Moonlit pines","Glacier peaks","Tropical islands",
-            "Solar eclipse","Prismatic glass","Cosmic constellation","Coral waves"};
+            "Solar eclipse","Prismatic glass","Cosmic constellation","Coral waves",
+            "Dunes","Dusk ridges","Misty forest","Mountain lake","Ciucas","Crete","San Juan","Scuol"};
     static final String[] MODES={"outfit_daily_mix","outfit_daily_nature","outfit_daily_abstract"};
     static final String[] COLLECTIONS={"Nature + abstract","Nature","Abstract"};
+    static String selection(Context c) {
+        String id=Prefs.backgroundId(c); return id!=null?id:Backgrounds.currentId(c);
+    }
     static int artIndex(Context c) {
-        String id=Backgrounds.currentId(c);
+        String id=selection(c);
+        if(OutfitRemoteWallpaper.selected(c)) return OutfitWallpaperSchedule.forDate(DAILY_MIX,java.util.Calendar.getInstance())%16;
+        for(int i=0;i<OutfitWallpaperSchedule.UPSTREAM.length;i++)
+            if(id.equals(OutfitWallpaperSchedule.UPSTREAM[i])) return 16+i;
         if(id.startsWith("outfit_daily_")) {
             int mode=id.equals(MODES[1])?14:id.equals(MODES[2])?15:16;
             return OutfitWallpaperSchedule.forDate(mode,java.util.Calendar.getInstance());
@@ -24,15 +31,18 @@ final class OutfitBackgrounds {
         return -1;
     }
     static Backgrounds.Preset current(Context c) {
-        String id=Backgrounds.currentId(c); int n=artIndex(c);
+        OutfitRemoteWallpaper.refresh(c,false);
+        if(OutfitRemoteWallpaper.selected(c) && OutfitRemoteWallpaper.file(c)!=null) return null;
+        String id=selection(c); int n=artIndex(c);
+        if(n>=16) return null; // Let upstream decode/dim/cache its own assets.
         if(n<0 && !id.equals("outfit_aurora")) return null;
         return new Backgrounds.Preset(id,n<0?"Aurora":(daily(c)?"Daily · ":"")+NAMES[n],
                 0xFF09131F,0xFF172535,0xFFFFFFFF,0xFF6DE7FF,0x3DFFFFFF);
     }
-    static boolean daily(Context c) { return Backgrounds.currentId(c).startsWith("outfit_daily_"); }
+    static boolean daily(Context c) { return selection(c).startsWith("outfit_daily_"); }
     static Drawable drawable(Context c, Backgrounds.Preset p) {
         int art=artIndex(c);
-        if(art>=0) return new ScenicWallpaper(art);
+        if(art>=0 && art<16) return new ScenicWallpaper(art);
         if(p.id.equals("outfit_aurora")) return c.getResources().getDrawable(R.drawable.aurora_wallpaper);
         return Backgrounds.drawable(p);
     }
@@ -42,7 +52,7 @@ final class OutfitBackgrounds {
     static View panel(final Context c, final SettingsPanel.Host host, final Runnable changed,
             final Runnable standard) {
         final Panel p=new Panel(c,"Background","Offline nature and abstract artwork",Panel.SHEET);
-        final Panel.Row daily=p.addRow("Change daily",daily(c)?"On":"Off",null);
+        final Panel.Row daily=p.addRow("Offline daily rotation",daily(c)?"On":"Off",null);
         final Panel.Row collection=p.addRow("Daily collection",COLLECTIONS[collection(c)],null);
         final Panel.Row fixed=p.addRow("Fixed artwork",Backgrounds.label(c),null);
         final Runnable refresh=()-> {
@@ -50,7 +60,7 @@ final class OutfitBackgrounds {
             fixed.setValue(Backgrounds.label(c)); host.rebuildGrid(); changed.run();
         };
         daily.cell.setOnClickListener(v->{
-            Backgrounds.choose(c,daily(c)?"outfit_art_"+Math.max(0,artIndex(c)):MODES[collection(c)]);
+            Backgrounds.choose(c,daily(c)?OutfitWallpaperSchedule.fixedId(Math.max(0,artIndex(c))):MODES[collection(c)]);
             refresh.run();
         });
         daily.setHelp("Changes once per local calendar day, while Home is open or when you return. Turn off to keep today's artwork.");
@@ -60,9 +70,10 @@ final class OutfitBackgrounds {
             if(daily(c)) Backgrounds.choose(c,MODES[n]); refresh.run();
         });
         fixed.cell.setOnClickListener(v->{
-            int n=artIndex(c); Backgrounds.choose(c,n==NAMES.length-1?"outfit_aurora":"outfit_art_"+(n+1)); refresh.run();
+            int n=artIndex(c); Backgrounds.choose(c,n==NAMES.length-1?"outfit_aurora":OutfitWallpaperSchedule.fixedId(n+1)); refresh.run();
         });
-        p.addRow("Other colors and custom photo","",standard).opens();
+        OutfitRemoteWallpaper.addControls(c,p,host,changed);
+        p.addRow("Upstream landscapes, colors and photo","",standard).opens();
         p.addRow("Back","",()->host.closePanel());
         return p.root;
     }

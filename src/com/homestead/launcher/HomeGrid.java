@@ -489,7 +489,12 @@ public class HomeGrid implements SettingsPanel.Host {
     /** Greeting and date, each its own setting; the grid moves down while either shows. */
     private void updateHead() {
         // The bar carries the clock and the date at the left, so the greeting steps aside.
-        if (barShown) { head.setVisibility(View.GONE); return; }
+        if (barShown) {
+            OutfitHeader.update(ctx, head, greet, date);
+            dateText.setVisibility(View.GONE);
+            if (barRule != null) barRule.setVisibility(View.GONE);
+            return;
+        }
         Date now = new Date();
         boolean g = Prefs.greeting(ctx);
         int df = Prefs.dateFormat(ctx);
@@ -1473,7 +1478,7 @@ public class HomeGrid implements SettingsPanel.Host {
         // The page scrolls below the bar, never behind it, and fades out as it nears it. The
         // padding keeps the first tile well clear of the pills when the page is at the top.
         updateClock();
-        setScrollTop(BAR_H_DP);
+        setScrollTop(OutfitHeader.scrollTop(ctx, BAR_H_DP));
         column.setPadding(dp(MARGIN_DP), dp(28), dp(MARGIN_DP), dp(BOTTOM_DP));
     }
 
