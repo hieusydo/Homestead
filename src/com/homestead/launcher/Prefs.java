@@ -48,6 +48,7 @@ public final class Prefs {
     private static final String K_RESTORE_WATCH = "restore_watch";
     private static final String K_SHORTCUTS_PLACE = "shortcuts_place";
     private static final String K_ROW_ORDER = "row_order";
+    private static final String K_ROW_ORDER_DOCK = "row_order_dock";
     private static final String K_SHORTCUTS = "shortcuts";
     private static final String K_DISABLED = "disabled_by_us";
     private static final String K_REFUSED = "refused_by_fire_os";
@@ -66,6 +67,8 @@ public final class Prefs {
     private static final String K_NONTV_WIDE = "nontv_wide";
     private static final String K_FIRE_ICONS = "fire_os_icons";
     private static final String K_LANGUAGE = "language";
+    private static final String K_PINNED = "pinned";
+    private static final String K_APPS_ONE = "apps_one_row";
 
     public static final int SORT_LAST_USED = 0;
     public static final int SORT_ALPHA = 1;
@@ -113,6 +116,57 @@ public final class Prefs {
     public static int hiddenCount(Context c) {
         return sp(c).getStringSet(K_HIDDEN, Collections.<String>emptySet()).size();
     }
+
+    // ---------------------------------------------------------------- pinned tiles
+
+    /** The most tiles the list keeps; entries for apps since uninstalled stay, so it can grow. */
+    private static final int PIN_MAX = 200;
+
+    /**
+     * The pinned tiles' keys (AppModel.Item.key()), one list for every row: a pinned tile
+     * comes before the unpinned ones in its row, in this order, and the rest of the row keeps
+     * the sort setting. A key never holds a newline, which separates them in the store.
+     */
+    public static List<String> pinned(Context c) {
+        String s = sp(c).getString(K_PINNED, "");
+        List<String> out = new ArrayList<String>();
+        if (s.length() == 0) return out;
+        for (String k : s.split("\n")) {
+            if (k.length() > 0 && !out.contains(k)) out.add(k);
+        }
+        return out;
+    }
+
+    public static void setPinned(Context c, List<String> keys) {
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < keys.size() && i < PIN_MAX; i++) {
+            b.append(i == 0 ? "" : "\n").append(keys.get(i));
+        }
+        sp(c).edit().putString(K_PINNED, b.toString()).apply();
+    }
+
+    public static boolean isPinned(Context c, String key) {
+        return key != null && pinned(c).contains(key);
+    }
+
+    /** Pin a tile: it goes after the tiles pinned before it. Pinned already: no change. */
+    public static void pin(Context c, String key) {
+        if (key == null) return;
+        List<String> keys = pinned(c);
+        if (keys.contains(key)) return;
+        keys.add(key);
+        setPinned(c, keys);
+    }
+
+    public static void unpin(Context c, String key) {
+        if (key == null) return;
+        List<String> keys = pinned(c);
+        if (keys.remove(key)) setPinned(c, keys);
+    }
+
+    public static int pinnedCount(Context c) { return pinned(c).size(); }
+
+    public static void clearPinned(Context c) { sp(c).edit().remove(K_PINNED).apply(); }
 
     // ---------------------------------------------------------------- layout
 
@@ -235,12 +289,34 @@ public final class Prefs {
     public static boolean nonTvWide(Context c) { return sp(c).getBoolean(K_NONTV_WIDE, false); }
     public static void setNonTvWide(Context c, boolean v) { sp(c).edit().putBoolean(K_NONTV_WIDE, v).apply(); }
 
+    /**
+     * Apps in one row: the non-TV apps join the TV apps' grid as wide tiles, and the two
+     * kinds sort as one list. Off, they are two rows.
+     */
+    public static boolean appsOneRow(Context c) { return sp(c).getBoolean(K_APPS_ONE, false); }
+    public static void setAppsOneRow(Context c, boolean v) { sp(c).edit().putBoolean(K_APPS_ONE, v).apply(); }
+
     /** Amazon Home, Settings and TV Health use icons read from Fire OS's own apps. */
     public static boolean fireOsIcons(Context c) { return sp(c).getBoolean(K_FIRE_ICONS, false); }
     public static void setFireOsIcons(Context c, boolean v) { sp(c).edit().putBoolean(K_FIRE_ICONS, v).apply(); }
     /** One of Lang.CODES; "" (the default) follows the TV's language. */
     public static String language(Context c) { return sp(c).getString(K_LANGUAGE, ""); }
     public static void setLanguage(Context c, String v) { sp(c).edit().putString(K_LANGUAGE, v).apply(); }
+
+    /** The home screen's layout: the sections, or the dock design from PR #27. */
+    public static final int DESIGN_CLASSIC = 0;
+    public static final int DESIGN_DOCK = 1;
+    public static int design(Context c) { return sp(c).getInt("home_design", DESIGN_CLASSIC); }
+    public static void setDesign(Context c, int v) { sp(c).edit().putInt("home_design", v).apply(); }
+    /** The dock layout is what the home screen draws: Dock chosen, and not Simple mode. */
+    public static boolean dockLayout(Context c) { return design(c) == DESIGN_DOCK && !simpleMode(c); }
+
+    /** The dock's tile size, 0 (small) to 3 (extra large); medium by default. */
+    public static int dockSize(Context c) {
+        int n = sp(c).getInt("dock_size", 1);
+        return (n < 0 || n > 3) ? 1 : n;
+    }
+    public static void setDockSize(Context c, int v) { sp(c).edit().putInt("dock_size", v).apply(); }
 
     /**
      * The Fire TV settings shortcuts: off, a row on the home screen (placed among the other
@@ -268,14 +344,24 @@ public final class Prefs {
     public static final String ROW_SHORTCUTS = "shortcuts", ROW_INPUTS = "inputs",
             ROW_NONTV = "nontv", ROW_TV = "tv";
     private static final String[] ROWS_USUAL = { ROW_SHORTCUTS, ROW_INPUTS, ROW_NONTV, ROW_TV };
+    /** Dock's grid as it was drawn before it had an order of its own. */
+    private static final String[] ROWS_DOCK = { ROW_INPUTS, ROW_SHORTCUTS, ROW_TV, ROW_NONTV };
 
     /**
      * The home screen's rows, top to bottom; every row once, shown or not, so a row switched
      * off keeps its place. The restore tile and the Live TV first tile sit above them all.
+     * Dock keeps its own order for the grid under the dock, so switching designs leaves each
+     * one as it was set.
      */
     public static List<String> rowOrder(Context c) {
-        String s = sp(c).getString(K_ROW_ORDER, null);
-        if (s == null) s = firstRowOrder(c);
+        String s;
+        if (dockLayout(c)) {
+            s = sp(c).getString(K_ROW_ORDER_DOCK, null);
+            if (s == null) s = join(Arrays.asList(ROWS_DOCK));
+        } else {
+            s = sp(c).getString(K_ROW_ORDER, null);
+            if (s == null) s = firstRowOrder(c);
+        }
         List<String> out = new ArrayList<String>();
         for (String k : s.split(",")) {
             if (Arrays.asList(ROWS_USUAL).contains(k) && !out.contains(k)) out.add(k);
@@ -284,12 +370,16 @@ public final class Prefs {
         return out;
     }
     public static void setRowOrder(Context c, List<String> order) {
-        StringBuilder b = new StringBuilder();
-        for (String k : order) b.append(b.length() == 0 ? "" : ",").append(k);
-        sp(c).edit().putString(K_ROW_ORDER, b.toString()).apply();
+        sp(c).edit().putString(dockLayout(c) ? K_ROW_ORDER_DOCK : K_ROW_ORDER, join(order)).apply();
     }
-    public static List<String> usualRowOrder() {
-        return new ArrayList<String>(Arrays.asList(ROWS_USUAL));
+    /** The order Reset to Default puts back, for the design in use. */
+    public static List<String> usualRowOrder(Context c) {
+        return new ArrayList<String>(Arrays.asList(dockLayout(c) ? ROWS_DOCK : ROWS_USUAL));
+    }
+    private static String join(List<String> keys) {
+        StringBuilder b = new StringBuilder();
+        for (String k : keys) b.append(b.length() == 0 ? "" : ",").append(k);
+        return b.toString();
     }
 
     /**

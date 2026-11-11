@@ -15,12 +15,12 @@
   <string name="home_sec_settings">Fire-TV-Einstellungen</string>
   <!-- Verknüpfungen zu den Fire-TV-Einstellungen: der Name auf einer Kachel und der kürzere auf einer Pille der oberen Leiste. -->
   <string name="home_sc_network">Netzwerk</string>
-  <string name="home_sc_display">Bild &amp; Ton</string>
+  <string name="home_sc_display">Töne und Bildschirm</string>
   <string name="home_sc_display_short">Bild</string>
   <string name="home_sc_controllers">Controller &amp; Bluetooth</string>
   <string name="home_sc_controllers_short">Controller</string>
-  <string name="home_sc_accessibility">Bedienungshilfen</string>
-  <string name="home_sc_applications">Anwendungen</string>
+  <string name="home_sc_accessibility">Barrierefreiheit</string>
+  <string name="home_sc_applications">Apps</string>
   <string name="home_sc_language">Sprache</string>
   <string name="home_sc_preferences">Voreinstellungen</string>
   <string name="home_sc_data">Datenüberwachung</string>
@@ -33,7 +33,7 @@
   <string name="home_sc_help">Hilfe</string>
   <string name="home_sc_more">Weitere Einstellungen</string>
   <string name="home_sc_settings">Einstellungen</string>
-  <string name="home_airplay_hint">Bild &amp; Ton öffnen, dann Apple AirPlay und HomeKit</string>
+  <string name="home_airplay_hint">Töne und Bildschirm öffnen, dann Apple AirPlay und HomeKit</string>
   <string name="home_profile_hint">Konto- und Profileinstellungen öffnen, dann Profile</string>
   <string name="home_kids_hint">Konto- und Profileinstellungen öffnen, dann Kindereinstellungen</string>
   <string name="home_wsiw_hint">Fragen Sie Alexa: „Was soll ich ansehen?“</string>
@@ -60,6 +60,16 @@
   <string name="opt_wide_help">Wie Fire TVs eigener Startbildschirm: das Symbol jeder App auf einer bannerbreiten Kachel, in einem Raster wie die TV-Apps.</string>
   <string name="opt_fire">Fire-TV-Systemsymbole</string>
   <string name="opt_fire_help">Amazon Home, Einstellungen und TV-Zustand nutzen die Symbole von Fire OS und seinen Einstellungen, ausgelesen von diesem TV. Fehlt eines, bleibt das übliche Symbol.</string>
+  <string name="opt_design">Design</string>
+  <string name="opt_design_help">Klassisch: die Bereiche, jeder unter seiner Überschrift. Dock: die ersten Ihrer TV-Apps in ihrer Sortierreihenfolge auf einem Band unten auf dem ersten Bildschirm, mit einem Leuchten in der Farbe der gewählten App, alles andere in einem Raster darunter in der unter Zeilenreihenfolge gewählten Reihenfolge, und Uhr und Einstellungen in einer Leiste oben.</string>
+  <string name="opt_design_classic">Klassisch</string>
+  <string name="opt_design_dock">Dock</string>
+  <string name="opt_dock_size">Dockgröße</string>
+  <string name="opt_dock_size_help">Wie groß die Kacheln im Dock sind. Bei den größeren Größen passen weniger hinein.</string>
+  <string name="opt_dock_s">Klein</string>
+  <string name="opt_dock_m">Mittel</string>
+  <string name="opt_dock_l">Groß</string>
+  <string name="opt_dock_xl">Sehr groß</string>
 
   <!-- Einstellungen -->
   <string name="set_title">Einstellungen</string>
@@ -89,7 +99,7 @@
   <string name="set_close">Schließen</string>
   <string name="set_back">Zurück</string>
   <string name="set_hidden">Ausgeblendete Kacheln</string>
-  <string name="set_hidden_note">MENÜ auf einer Kachel drücken, um sie auszublenden (langes Drücken geht auch; nicht im einfachen Modus). Ausblenden ändert nur, was dieser Launcher zeichnet – nichts wird deaktiviert oder deinstalliert, und die App funktioniert überall sonst weiter.</string>
+  <string name="set_hidden_note">MENÜ auf einer Kachel drücken (oder lange drücken) für ihr Menü: nach vorn anheften, verschieben oder ausblenden. Nicht im einfachen Modus. Ausblenden ändert nur, was dieser Launcher zeichnet – nichts wird deaktiviert oder deinstalliert, und die App funktioniert überall sonst weiter.</string>
   <string name="set_sort">Apps sortieren nach</string>
   <string name="set_sort_az">A – Z</string>
   <string name="set_sort_last">Zuletzt verwendet</string>
@@ -110,7 +120,7 @@
   <string name="set_photo_pick">Foto auf diesem TV auswählen</string>
   <string name="set_photo_pick_help">Listet die Bilder im Download-Ordner des TVs. Benötigt den Gerätetunnel.</string>
   <string name="set_hidden_sub">Eines auswählen, um es wieder auf dem Startbildschirm anzuzeigen</string>
-  <string name="set_hidden_none">Nichts ist ausgeblendet. MENÜ auf einer Kachel drücken (oder lange drücken), um sie auszublenden.</string>
+  <string name="set_hidden_none">Nichts ist ausgeblendet. MENÜ auf einer Kachel drücken (oder lange drücken) und „Ausblenden“ wählen.</string>
   <string name="set_hidden_value">ausgeblendet</string>
   <string name="set_shown_value">angezeigt</string>
   <string name="set_show_all">Alle ausgeblendeten Kacheln anzeigen</string>
@@ -123,7 +133,7 @@
   <string name="setup_sub">Was dieser Launcher braucht und wie man ihn einschaltet</string>
   <string name="setup_status">Status</string>
   <string name="setup_svc">Home-Tasten-Umleitung</string>
-  <string name="setup_svc_help">Fire OS führt Homestead nicht unter Einstellungen > Bedienungshilfen auf, deshalb wird die Umleitung über die Debugging-Verbindung des TVs eingeschaltet: von diesem TV mit „Einrichtung automatisch abschließen“ unten oder von einem Computer mit „Befehle für einen Computer“.\n\nOhne sie funktioniert Homestead weiterhin als App, die Sie selbst öffnen; nur die Home-Taste braucht sie.\n\nFalls die Home-Taste je wieder zu Amazons Startbildschirm führt, etwa nach einem Update, „Einrichtung automatisch abschließen“ erneut ausführen.</string>
+  <string name="setup_svc_help">Fire OS führt Homestead nicht unter Einstellungen > Barrierefreiheit auf, deshalb wird die Umleitung über die Debugging-Verbindung des TVs eingeschaltet: von diesem TV mit „Einrichtung automatisch abschließen“ unten oder von einem Computer mit „Befehle für einen Computer“.\n\nOhne sie funktioniert Homestead weiterhin als App, die Sie selbst öffnen; nur die Home-Taste braucht sie.\n\nFalls die Home-Taste je wieder zu Amazons Startbildschirm führt, etwa nach einem Update, „Einrichtung automatisch abschließen“ erneut ausführen.</string>
   <string name="setup_ovl">Startbildschirm ohne Umwege</string>
   <string name="setup_use">App-Reihenfolge</string>
   <string name="setup_adb">Diesen TV konfigurieren</string>
@@ -206,7 +216,7 @@
   <string name="onb_card_simple_pill">Für jemand anderen</string>
   <string name="onb_continue">Weiter</string>
   <string name="onb_home_title">Startbildschirm einschalten</string>
-  <string name="onb_home_body">Fire OS führt Homestead nicht in seinem Menü für Bedienungshilfen auf, deshalb schaltet die App es selbst ein, über den Debugging-Dienst des TVs. Kein Computer nötig.</string>
+  <string name="onb_home_body">Fire OS führt Homestead nicht in seinem Menü für Barrierefreiheit auf, deshalb schaltet die App es selbst ein, über den Debugging-Dienst des TVs. Kein Computer nötig.</string>
   <string name="onb_home_step1">ADB-Debugging einschalten: Einstellungen, Mein Fire TV, Entwickleroptionen</string>
   <string name="onb_home_step2">„Einrichten“ drücken und zwei Abfragen bestätigen: einen VPN-Hinweis, dann die Schlüsselabfrage des TVs. Bei der zweiten „Immer zulassen“ ankreuzen</string>
   <string name="onb_home_note">Androids VPN-Hinweis besagt, dass die App den Netzwerkverkehr überwachen könnte; bei Homestead wird darüber nur die Debugging-Verbindung des TVs selbst übertragen, und nichts verlässt den TV. Drücken Sie in jeder Abfrage „Unten“, um „OK“ zu erreichen. Keine Entwickleroptionen? Mein Fire TV öffnen, dann „Info“, und siebenmal „Auswählen“ auf dem Gerätenamen drücken. Um das später zu erledigen, „Weiter“ drücken; Homestead lässt sich weiterhin aus Amazons App-Zeile öffnen.</string>
@@ -403,7 +413,7 @@
   <string name="upd_downloading_pct">wird heruntergeladen: %1$d%%</string>
   <string name="upd_in_installer">im Installer</string>
   <string name="upd_needs_permission">braucht eine Berechtigung</string>
-  <string name="upd_not_allowed">Fire OS muss Homestead zuerst das Installieren von Apps erlauben. Öffnen Sie in den Einstellungen des TVs „Gerät &amp; Software“ (bei manchen Modellen Mein Fire TV), dann Entwickleroptionen, dann „Unbekannte Apps installieren“, und schalten Sie Homestead ein. Kehren Sie hierher zurück und wählen Sie erneut „Jetzt installieren“. Mit eingerichtetem Gerätetunnel entfällt das.</string>
+  <string name="upd_not_allowed">Fire OS muss Homestead zuerst das Installieren von Apps erlauben. Öffnen Sie in den Einstellungen des TVs „Gerät und Software“ (bei manchen Modellen Mein Fire TV), dann Entwickleroptionen, dann „Unbekannte Apps installieren“, und schalten Sie Homestead ein. Kehren Sie hierher zurück und wählen Sie erneut „Jetzt installieren“. Mit eingerichtetem Gerätetunnel entfällt das.</string>
   <string name="upd_failed_short">fehlgeschlagen</string>
   <string name="upd_later">Später</string>
   <string name="upd_skip">Diese Version überspringen</string>
@@ -468,6 +478,16 @@
   <string name="bg_ember">Glut</string>
   <string name="bg_deepsea">Tiefsee</string>
   <string name="bg_list_help">Eines auswählen, um es zu verwenden. Der Startbildschirm neben dieser Seite ändert sich sofort.</string>
+  <string name="bg_landscapes">Landschaften</string>
+  <string name="bg_landscapes_help">Macht diese Landschaft zum Hintergrund. Ein gesendetes Foto bleibt erhalten; wählen Sie „Foto“, um dorthin zurückzukehren. Das Abdunkeln oben gilt auch hier.</string>
+  <string name="ls_drawn_dusk">Berge im Abendlicht</string>
+  <string name="ls_drawn_lake">Bergsee</string>
+  <string name="ls_drawn_forest">Wald im Nebel</string>
+  <string name="ls_drawn_dunes">Dünen</string>
+  <string name="ls_photo_ciucas">Ciucaș-Gipfel, Rumänien</string>
+  <string name="ls_photo_crete">Ida-Gebirge, Kreta</string>
+  <string name="ls_photo_sanjuan">San-Juan-Tal</string>
+  <string name="ls_photo_scuol">Alpen bei Scuol</string>
   <string name="bg_black_help">Schwarz eignet sich für OLED-Bildschirme und nächtliches Ansehen.</string>
   <string name="bg_photo_help">Wählen Sie unten ein auf dem TV gespeichertes Bild (benötigt den Gerätetunnel) oder senden Sie ein JPEG oder PNG von einem Computer:</string>
   <string name="bg_in_use">in Verwendung</string>
@@ -665,12 +685,12 @@
   <string name="lo_network">Netzwerkdetails</string>
   <string name="lo_network_v">Netzwerk in den Fire-TV-Einstellungen</string>
   <string name="lo_network_help">amazon.net.UNIFIED_NETWORK. Der Bildschirm Netzwerk öffnet sich über Einstellungen &gt; System &gt; Fire-TV-Einstellungen.</string>
-  <string name="lo_lang">Sprache, Bedienungshilfen</string>
+  <string name="lo_lang">Sprache, Barrierefreiheit</string>
   <string name="lo_lang_v">Alle Einstellungen</string>
   <string name="lo_lang_help">Amazons Einstellungs-App öffnet diese nur für Amazons eigenen Launcher. „Alle Amazon-Einstellungen“ in den Fire-TV-Einstellungen schaltet den Launcher kurz ein, um sie zu erreichen.</string>
   <string name="lo_remote">Einstellungstaste der Fernbedienung</string>
   <string name="lo_remote_v">Konto, Apps, Bild, Ton</string>
-  <string name="lo_remote_help">Sie öffnet Amazons Schnelleinstellungen. Sprache und Bedienungshilfen sind nicht dabei.</string>
+  <string name="lo_remote_help">Sie öffnet Amazons Schnelleinstellungen. Sprache und Barrierefreiheit sind nicht dabei.</string>
   <string name="lo_still">Funktioniert weiterhin</string>
   <string name="lo_still_note">Amazons Einstellungs-App (com.amazon.tv.settings.v2) ist ein eigenes Paket und funktioniert weiter. Einstellungen &gt; System &gt; Fire-TV-Einstellungen öffnet ihre Bildschirme direkt.</string>
   <string name="lo_back_on">Um Amazons Launcher wieder einzuschalten: Bereinigung, „Amazons Launcher“, oder adb shell pm enable --user 0 com.amazon.tv.launcher</string>
@@ -698,6 +718,7 @@
   <string name="ro_top">Von oben nach unten</string>
   <string name="ro_reset">Auf Standard zurücksetzen</string>
   <string name="ro_reset_help">Fire-TV-Einstellungsverknüpfungen, Eingänge &amp; System, Nicht-TV-Anwendungen, dann TV-Anwendungen.</string>
+  <string name="ro_reset_help_dock">Eingänge &amp; System, Fire-TV-Einstellungsverknüpfungen, TV-Anwendungen, dann Nicht-TV-Anwendungen.</string>
   <string name="ro_in_bar">in der oberen Leiste</string>
   <string name="ro_hidden">ausgeblendet</string>
   <string name="ro_first">%1$s zuerst</string>
@@ -705,4 +726,27 @@
   <string name="ro_s_inputs">Eingänge</string>
   <string name="ro_s_nontv">Nicht-TV-Apps</string>
   <string name="ro_s_tv">TV-Apps</string>
+
+  <!-- 2.1.0: das Kachelmenü, angeheftete Kacheln, Apps in einer Zeile -->
+  <string name="home_sec_apps">Anwendungen</string>
+  <string name="tm_pin">Nach vorn anheften</string>
+  <string name="tm_pin_help">Angeheftete Kacheln stehen in ihrer Zeile vorn, in der Reihenfolge des Anheftens. Der Rest der Zeile behält die Sortierung.</string>
+  <string name="tm_unpin">Lösen</string>
+  <string name="tm_unpin_help">Zurück an ihren Platz in der Sortierung.</string>
+  <string name="tm_move">Verschieben</string>
+  <string name="tm_move_help">Links und Rechts verschieben sie um einen Platz, Oben und Unten um eine Zeile. OK oder Zurück legt sie ab. Sobald sie sich bewegt, wird sie angeheftet, ebenso die Kacheln vor ihr und die, an denen sie vorbeizieht, damit sie ihren Platz behalten.</string>
+  <string name="tm_move_help_dock">Das Dock enthält die ersten TV-Apps, daher landet eine TV-App, die ganz nach vorn geschoben wird, im Dock.</string>
+  <string name="tm_move_help_dock_all">Das Dock enthält die ersten Apps, daher landet eine App, die ganz nach vorn geschoben wird, im Dock.</string>
+  <string name="tm_hide">Ausblenden</string>
+  <string name="tm_hide_help">Nur dieser Launcher zeichnet sie nicht mehr; nichts wird deaktiviert oder deinstalliert. Ausgeblendete Kacheln stehen unter Einstellungen → Startbildschirm.</string>
+  <string name="tm_moving">%1$s wird verschoben: Links und Rechts verschieben, OK oder Zurück legt ab.</string>
+  <string name="set_pinned">Angeheftete Kacheln</string>
+  <string name="set_pinned_sub">Vorn in ihrer Zeile, in dieser Reihenfolge. Eine auswählen, um sie zu lösen.</string>
+  <string name="set_pinned_none">Nichts ist angeheftet. MENÜ auf einer Kachel drücken (oder lange drücken) und „Nach vorn anheften“ wählen.</string>
+  <string name="set_pinned_value">angeheftet</string>
+  <string name="set_unpinned_value">gelöst</string>
+  <string name="set_unpin_all">Alle lösen</string>
+  <string name="set_apps_one">Apps in einer Zeile</string>
+  <string name="set_apps_one_help">TV-Apps und die übrigen Apps zusammen in einem Raster, als eine Liste sortiert. Die übrigen Apps bekommen breite Kacheln aus ihren Symbolen.</string>
+  <string name="ro_in_apps">in Anwendungen</string>
 </resources>

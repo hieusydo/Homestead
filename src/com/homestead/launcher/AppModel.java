@@ -85,6 +85,10 @@ public final class AppModel {
     static final String PROFILE_PICKER_PKG = "com.amazon.ftv.profilepicker";
     static final String AMAZON_KIDS_PKG = "com.amazon.tahoe";
     static final String WSIW_PKG = "com.amazon.vizzini.ftvcds";
+
+    /** The Appstore, and the store's own home screen (its launcher entry is not the store). */
+    static final String APPSTORE_PKG = "com.amazon.venezia";
+    static final String APPSTORE_HOME = "com.amazon.venezia.ade.ADEHomeActivity";
     /** Prime Video on Fire TV. */
     static final String PRIME_VIDEO_PKG = "com.amazon.firebat";
     /**
@@ -124,6 +128,8 @@ public final class AppModel {
         public int glyph;
         /** Inputs: the TV reports a device on this input. */
         public boolean connected;
+        /** The banner's dominant colour, for the dock design's glow; 0 without a banner. */
+        public int accent;
 
         /** Stable across a re-sort; the handoff carries this, never an index. */
         public String key() {
@@ -250,7 +256,9 @@ public final class AppModel {
         health.icon = toBitmap(c, d != null ? d : drawable(c, android.R.drawable.ic_menu_info_details), ICON_PX, ICON_PX, false);
         ITEMS.add(health);
         d = null;
-        boolean wide = Prefs.nonTvWide(c);
+        // Wide tiles for the non-TV apps: asked for, or needed for the one row they then share
+        // with the TV apps' banners.
+        boolean wide = Prefs.nonTvWide(c) || Prefs.appsOneRow(c);
 
         loadShortcuts(c);
 
@@ -291,6 +299,7 @@ public final class AppModel {
                 a.banner = toBitmap(c, raw, cellW, cellH, true);
                 raw = null;
                 a.tvApp = (ci == 0) || a.banner != null;
+                if (a.banner != null) a.accent = dominantColor(a.banner);
                 // Icons are only shown when there is no banner, so only decode them then.
                 if (a.banner == null) {
                     Drawable ic = null;
@@ -304,8 +313,12 @@ public final class AppModel {
                     if (ic == null) {
                         try { ic = ri.loadIcon(pm); } catch (Throwable t) { ic = null; }
                     }
-                    if (wide) a.banner = iconTile(c, ic, cellW, cellH);
-                    else a.icon = toBitmap(c, ic, ICON_PX, ICON_PX, false);
+                    if (wide) {
+                        a.banner = iconTile(c, ic, cellW, cellH);
+                        if (a.banner != null) a.accent = dominantColor(a.banner);
+                    } else {
+                        a.icon = toBitmap(c, ic, ICON_PX, ICON_PX, false);
+                    }
                     ic = null;
                 }
                 ITEMS.add(a);
@@ -596,6 +609,39 @@ public final class AppModel {
     }
 
     /**
+     * One colour for the dock design's glow (from PR #27): the average of a 6x6 grid of
+     * samples, pushed to a minimum saturation and brightness so it reads on a dark screen.
+     */
+    private static int dominantColor(Bitmap bmp) {
+        try {
+            int w = bmp.getWidth(), h = bmp.getHeight();
+            long r = 0, g = 0, b = 0;
+            int n = 0;
+            for (int yi = 0; yi < 6; yi++) {
+                int y = Math.min(h - 1, (int) ((yi + 0.5f) * h / 6));
+                for (int xi = 0; xi < 6; xi++) {
+                    int p = bmp.getPixel(Math.min(w - 1, (int) ((xi + 0.5f) * w / 6)), y);
+                    if ((p >>> 24) < 32) continue;
+                    r += (p >> 16) & 0xFF;
+                    g += (p >> 8) & 0xFF;
+                    b += p & 0xFF;
+                    n++;
+                }
+            }
+            if (n == 0) return 0;
+            float[] hsv = new float[3];
+            android.graphics.Color.RGBToHSV((int) (r / n), (int) (g / n), (int) (b / n), hsv);
+            // Colourless art (a black-and-white banner) has no hue to push: no glow, not red.
+            if (hsv[1] < 0.12f) return 0;
+            hsv[1] = Math.max(hsv[1], 0.55f);
+            hsv[2] = Math.max(hsv[2], 0.55f);
+            return android.graphics.Color.HSVToColor(hsv);
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    /**
      * A banner for an app that has none, the way Fire TV's own home draws one: the icon's art
      * at full height, its outer columns stretched to the sides. An icon with a transparent
      * edge (round, or a glyph) sits whole on a neutral card instead. One that is opaque at
@@ -755,8 +801,18 @@ public final class AppModel {
         }
 
         final boolean byLastUsed = (Prefs.sort(c) == Prefs.SORT_LAST_USED);
+        // Apps in one row: TV and non-TV apps sort as one list instead of TV apps first.
+        final boolean oneRow = Prefs.appsOneRow(c);
+        // Pinned tiles lead their row, in the order they were pinned; one list for every row.
+        final java.util.Map<String, Integer> pinAt = new java.util.HashMap<String, Integer>();
+        List<String> pins = Prefs.pinned(c);
+        for (int i = 0; i < pins.size(); i++) pinAt.put(pins.get(i), i);
         Collections.sort(ITEMS, new Comparator<Item>() {
             public int compare(Item x, Item y) {
+                // The rows first, so a pin only ever moves a tile within its own row.
+                if (group(x.type) != group(y.type)) return group(x.type) - group(y.type);
+                int px = pinRank(x), py = pinRank(y);
+                if (px != py) return px < py ? -1 : 1;
                 if (x.type != y.type) return rank(x.type) - rank(y.type);
                 if (x.type == TYPE_INPUT) {
                     boolean xh = x.label.toUpperCase(Locale.US).startsWith("HDMI");
@@ -765,10 +821,21 @@ public final class AppModel {
                     return x.label.compareToIgnoreCase(y.label);
                 }
                 if (x.type != TYPE_APP) return 0;
-                if (x.tvApp != y.tvApp) return x.tvApp ? -1 : 1;
+                if (!oneRow && x.tvApp != y.tvApp) return x.tvApp ? -1 : 1;
                 if (!byLastUsed) return x.label.compareToIgnoreCase(y.label);
                 if (x.lastUsed != y.lastUsed) return (x.lastUsed > y.lastUsed) ? -1 : 1;
                 return x.label.compareToIgnoreCase(y.label);
+            }
+            private int pinRank(Item it) {
+                Integer i = pinAt.isEmpty() ? null : pinAt.get(it.key());
+                return i == null ? Integer.MAX_VALUE : i;
+            }
+            /** The home screen's rows: the inputs row holds Live TV, the inputs and the system tiles. */
+            private int group(int t) {
+                if (t == TYPE_RESTORE) return 0;
+                if (t == TYPE_SHORTCUT) return 2;
+                if (t == TYPE_APP) return 3;
+                return 1;
             }
             private int rank(int t) {
                 if (t == TYPE_RESTORE) return -1;

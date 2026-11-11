@@ -1,12 +1,12 @@
 # Homestead Outfit
 
-Custom launcher based on Homestead **1.9.0**, with the Outfit font, Aurora-inspired app docks, five ordered favorites, top-right Inputs / Wi-Fi / Settings controls, focus labels, and daily nature/abstract wallpapers. Android package: `com.cleantv.outfit`; original Homestead remains a separate fallback.
+Custom launcher based on Homestead **2.2.0**, with the Outfit font, Aurora-inspired app docks, five ordered favorites, top-right Inputs / Wi-Fi / Settings controls, focus labels, and daily nature/abstract wallpapers. Android package: `com.cleantv.outfit`; original Homestead remains a separate fallback.
 
 ![Homestead Outfit](screenshots/outfit-home.png)
 
 ## Keeping upstream merges small
 
-`outfit` includes upstream `main` through `cbc1bb8` (1.9.0). Merge upstream normally; do not replace upstream files with old Outfit copies or blindly resolve conflicts using ours/theirs.
+`outfit` includes upstream `main` through `a1d6dae` (2.2.0). Merge upstream normally; do not replace upstream files with old Outfit copies or blindly resolve conflicts using ours/theirs.
 
 Custom behavior lives in added files:
 

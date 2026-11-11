@@ -90,6 +90,13 @@ final class Backgrounds {
     /** The photo's text and ring colours, and its look until the photo has loaded. */
     static final Preset PHOTO_LOOK =
             new Preset(PHOTO_ID, "Photo", 0xFF000000, 0xFF000000, 0xFFFFFFFF, 0xFFE6E6E6, EDGE);
+    /**
+     * A shipped landscape's setting value: this prefix and the asset's name without its
+     * landscape_ prefix or extension ("ls_drawn_dusk"). Shown with PHOTO_LOOK's colours and
+     * decoded straight from the asset, so the photo sent from a computer is never touched.
+     */
+    static final String LANDSCAPE_PREFIX = "ls_";
+    private static final String LANDSCAPE_FILE_PREFIX = "landscape_";
 
     private static final String[] FILES = { "background.jpg", "background.jpeg", "background.png" };
     /** Bigger files are ignored rather than decoded. */
@@ -127,14 +134,39 @@ final class Backgrounds {
         Preset custom = OutfitBackgrounds.current(c);
         if (custom != null) return custom;
         String id = currentId(c);
-        if (PHOTO_ID.equals(id)) return PHOTO_LOOK;
+        if (PHOTO_ID.equals(id) || isLandscape(id)) return PHOTO_LOOK;
         for (int i = 0; i < PRESETS.length; i++) {
             if (PRESETS[i].id.equals(id)) return PRESETS[i];
         }
         return PRESETS[0];
     }
 
+    /** The photo sent from a computer or picked on the TV is the chosen look. */
     static boolean photoChosen(Context c) { return PHOTO_ID.equals(currentId(c)); }
+
+    static boolean isLandscape(String id) { return id != null && id.startsWith(LANDSCAPE_PREFIX); }
+
+    /** The id a landscape asset is saved as: "ls_" and its name without landscape_ or .jpg. */
+    static String landscapeId(String file) { return LANDSCAPE_PREFIX + base(file); }
+
+    /** An asset name or an id, reduced to the part they share. */
+    private static String base(String fileOrId) {
+        return fileOrId.replaceFirst("^" + LANDSCAPE_FILE_PREFIX, "")
+                .replaceFirst("^" + LANDSCAPE_PREFIX, "").replaceFirst("\\.[A-Za-z]+$", "");
+    }
+
+    /** The asset behind a landscape id, or null when this build no longer ships it. */
+    static String landscapeFile(Context c, String id) {
+        if (!isLandscape(id)) return null;
+        String[] all = landscapes(c);
+        for (int i = 0; i < all.length; i++) {
+            if (base(all[i]).equals(base(id))) return all[i];
+        }
+        return null;
+    }
+
+    /** The cache key for a landscape; the assets never change within one build. */
+    static String assetKey(String file) { return file == null ? null : "asset|" + file; }
 
     /**
      * Save a choice. Its old position is saved too where it had one, so going back to a
@@ -163,6 +195,8 @@ final class Backgrounds {
 
     /** The value shown on the Settings row. */
     static String label(Context c) {
+        String id = currentId(c);
+        if (isLandscape(id)) return landscapeName(c, id);
         if (!photoChosen(c)) return name(c, current(c));
         return c.getString(photoFile(c) != null ? R.string.bg_photo : R.string.bg_photo_none);
     }
@@ -231,6 +265,43 @@ final class Backgrounds {
         }
     }
 
+    /**
+     * The landscapes shipped in the app: assets named landscape_*, sorted. At the assets root,
+     * since aapt2 on Windows stores a subfolder's files with a backslash Android cannot find.
+     */
+    static String[] landscapes(Context c) {
+        try {
+            java.util.List<String> out = new java.util.ArrayList<String>();
+            for (String n : c.getAssets().list("")) if (n.startsWith("landscape_")) out.add(n);
+            java.util.Collections.sort(out);
+            return out.toArray(new String[out.size()]);
+        } catch (Throwable t) {
+            return new String[0];
+        }
+    }
+
+    /** A landscape's name, from its asset name or its id: string ls_<base>, else the base. */
+    static String landscapeName(Context c, String fileOrId) {
+        String base = base(fileOrId);
+        int id = c.getResources().getIdentifier(LANDSCAPE_PREFIX + base, "string", c.getPackageName());
+        return id == 0 ? base : c.getString(id);
+    }
+
+    /** A small copy for the row's swatch; null if it cannot be read. */
+    static Bitmap landscapeThumb(Context c, String file) {
+        java.io.InputStream in = null;
+        try {
+            in = c.getAssets().open(file);
+            BitmapFactory.Options o = new BitmapFactory.Options();
+            o.inSampleSize = 16;
+            return BitmapFactory.decodeStream(in, null, o);
+        } catch (Throwable t) {
+            return null;
+        } finally {
+            if (in != null) try { in.close(); } catch (Throwable ignored) { }
+        }
+    }
+
     /** Identifies one version of the file, so a replaced photo is noticed. */
     static String keyOf(File f) {
         return (f == null) ? null : f.getName() + "|" + f.length() + "|" + f.lastModified();
@@ -254,24 +325,48 @@ final class Backgrounds {
         photoKey = null;
     }
 
+    /** Where a picture's bytes come from: the photo file, or a landscape in the assets. */
+    private interface Source {
+        java.io.InputStream open() throws java.io.IOException;
+        boolean tooBig();
+    }
+
     /**
      * Decode the photo on a worker and run done on the main thread when it lands. Does
      * nothing if that version is already decoded or a decode is running. Main thread.
      */
     static void load(Context c, final File f, final Runnable done) {
-        final String key = keyOf(f);
+        load(c, keyOf(f), new Source() {
+            public java.io.InputStream open() throws java.io.IOException {
+                return new java.io.FileInputStream(f);
+            }
+            public boolean tooBig() { return f.length() > MAX_FILE; }
+        }, done);
+    }
+
+    /** The same for a shipped landscape, read from the assets; it shares the photo's cache. */
+    static void loadAsset(Context c, final String file, final Runnable done) {
+        final android.content.res.AssetManager am = c.getApplicationContext().getAssets();
+        load(c, assetKey(file), new Source() {
+            public java.io.InputStream open() throws java.io.IOException { return am.open(file); }
+            public boolean tooBig() { return false; }
+        }, done);
+    }
+
+    private static void load(Context c, final String key, final Source src, final Runnable done) {
         if (key == null || key.equals(photoKey) || loading) return;
         loading = true;
         final Context app = c.getApplicationContext();
+        final String wanted = currentId(app);
         final DisplayMetrics dm = c.getResources().getDisplayMetrics();
         new Thread(new Runnable() {
             public void run() {
-                final Bitmap b = decode(f, dm.widthPixels, dm.heightPixels);
+                final Bitmap b = decode(src, dm.widthPixels, dm.heightPixels);
                 MAIN.post(new Runnable() {
                     public void run() {
                         loading = false;
                         // The user moved on while it decoded: do not keep it.
-                        if (!photoChosen(app)) return;
+                        if (!wanted.equals(currentId(app))) return;
                         photo = b;
                         photoKey = key;
                         Log.i(TAG, "background photo " + (b == null ? "could not be read"
@@ -284,18 +379,23 @@ final class Backgrounds {
     }
 
     /** Scaled and centre-cropped to the screen, so nothing larger stays in memory. */
-    private static Bitmap decode(File f, int dw, int dh) {
+    private static Bitmap decode(Source f, int dw, int dh) {
+        java.io.InputStream in = null;
         try {
-            if (f.length() > MAX_FILE) return null;
+            if (f.tooBig()) return null;
             BitmapFactory.Options o = new BitmapFactory.Options();
             o.inJustDecodeBounds = true;
-            BitmapFactory.decodeFile(f.getPath(), o);
+            in = f.open();
+            BitmapFactory.decodeStream(in, null, o);
+            in.close();
+            in = null;
             if (o.outWidth <= 0 || o.outHeight <= 0) return null;
             int sample = 1;
             while (o.outWidth / (sample * 2) >= dw && o.outHeight / (sample * 2) >= dh) sample *= 2;
             o = new BitmapFactory.Options();
             o.inSampleSize = sample;
-            Bitmap src = BitmapFactory.decodeFile(f.getPath(), o);
+            in = f.open();
+            Bitmap src = BitmapFactory.decodeStream(in, null, o);
             if (src == null) return null;
             float s = Math.max((float) dw / src.getWidth(), (float) dh / src.getHeight());
             Matrix m = new Matrix();
@@ -308,6 +408,8 @@ final class Backgrounds {
         } catch (Throwable t) {
             Log.w(TAG, "background photo failed: " + t);
             return null;
+        } finally {
+            if (in != null) try { in.close(); } catch (Throwable ignored) { }
         }
     }
 

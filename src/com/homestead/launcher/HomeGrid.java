@@ -77,9 +77,24 @@ public class HomeGrid implements SettingsPanel.Host {
     private static final int HEADER_BOTTOM_DP = 12;
     private static final float FOCUS_SCALE = 1.10f;
     private static final long FOCUS_MS = 140L;
-    /** The name label under a focused banner. */
-    private static final int NAME_H_DP = 20;
-    private static final String NAME_TAG = "name";
+    /** Below the last row: room for a focused tile's growth and its name, clear of the screen edge. */
+    private static final int BOTTOM_DP = MARGIN_DP + 32;
+
+    // The dock design (PR #27): the first TV apps on a translucent band at the bottom of the
+    // first screen, one grid below it, a glow in the focused banner's colour, a springier focus.
+    /** Dock tile height per Prefs.dockSize; the tiles are 16:9. */
+    private static final int[] DOCK_H_DP = { 88, 112, 136, 160 };
+    private static final int DOCK_PAD_DP = 14;
+    private static final int DOCK_BOTTOM_DP = 26;
+    private static final int DOCK_BAND_COLOR = 0x24FFFFFF;
+    private static final int DOCK_CARD_COLOR = 0xFF1B1B1E;
+    private static final int GLOW_ALPHA = 0x8A;
+    private static final float DOCK_FOCUS_SCALE = 1.12f;
+    private static final int DOCK_LIFT_DP = 10;
+    private static final android.view.animation.Interpolator DOCK_IN =
+            new android.view.animation.OvershootInterpolator(2.2f);
+    private static final android.view.animation.Interpolator DOCK_OUT =
+            new android.view.animation.DecelerateInterpolator(1.4f);
 
     private OutfitLayout outfit;
     private final Context ctx;
@@ -99,6 +114,17 @@ public class HomeGrid implements SettingsPanel.Host {
     private boolean barShown;
     private View barSpacer, barRule;
 
+    /** The dock design is in use for this build (Settings, Home screen, Design). */
+    private boolean dock;
+    /** Behind everything; coloured by the focused banner in the dock design, else empty. */
+    private final View glow;
+    private int glowColor;
+    /** The focused tile's accent, so a background change can redraw or drop the glow. */
+    private int focusedAccent;
+    /** The dock's title line, naming the focused dock tile; null without a dock. */
+    private TextView dockTitle;
+    private final java.util.Set<String> dockKeys = new java.util.LinkedHashSet<String>();
+
     private final Map<String, View> cellsByKey = new HashMap<String, View>();
     /**
      * The top bar's pills by key, so focus can return to one after a panel, an app or the
@@ -111,10 +137,20 @@ public class HomeGrid implements SettingsPanel.Host {
     private final List<HorizontalScrollView> rows = new ArrayList<HorizontalScrollView>();
     private View focusedCell;
     private String focusedKey;
-    /** The grid row lifted so its focused tile's name label draws over the row below. */
-    private View raisedRow;
+    /**
+     * The title line that names a focused banner (which has no name on it): the heading line
+     * of its row in Classic, by tile key, or the top line (topTitle, next to the clock) while
+     * that heading is scrolled out of view; the top line in Dock, for the grid under the dock
+     * (the dock's own title line names the dock's tiles). shownTitle is the one in use.
+     */
+    private final Map<String, TextView> titleSlots = new HashMap<String, TextView>();
+    private TextView headerName, topTitle, shownTitle;
     /** The Live TV first tile, or null when that layout is not in use. */
     private View topTile;
+    /** The tile picked up with Move in its menu (its key); the D-pad shifts it. Null: none. */
+    private String moving;
+    /** The ring of a picked-up tile: warm, so it reads on every look and over any banner. */
+    private static final int MOVE_RING = 0xFFE8C468;
     /** AppModel.order() as of the last build, to spot a re-sort done by the other grid. */
     private String builtOrder;
     private boolean restoreShown;
@@ -188,10 +224,38 @@ public class HomeGrid implements SettingsPanel.Host {
                     }
                     return true;
                 }
+                // A tile picked up from its menu: the D-pad moves it, OK or Back puts it down.
+                if (moving != null && panels.isEmpty()) {
+                    int code = e.getKeyCode();
+                    if (code == android.view.KeyEvent.KEYCODE_DPAD_LEFT
+                            || code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+                            || code == android.view.KeyEvent.KEYCODE_DPAD_UP
+                            || code == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
+                        if (e.getAction() == android.view.KeyEvent.ACTION_DOWN) {
+                            int step = moveStep(code);
+                            if (step != 0) moveTile(moving, step);
+                        }
+                        return true;
+                    }
+                    if (code == android.view.KeyEvent.KEYCODE_DPAD_CENTER
+                            || code == android.view.KeyEvent.KEYCODE_ENTER
+                            || code == android.view.KeyEvent.KEYCODE_BACK
+                            || code == android.view.KeyEvent.KEYCODE_MENU) {
+                        if (e.getAction() == android.view.KeyEvent.ACTION_UP) stopMoving();
+                        return true;
+                    }
+                }
                 // Outfit opens Settings with one Menu press; long-press still hides a tile.
                 if (e.getKeyCode() == android.view.KeyEvent.KEYCODE_MENU && panels.isEmpty()) {
                     if (e.getAction() == android.view.KeyEvent.ACTION_UP) {
-                        showPanel(SettingsPanel.build(ctx, panelHost));
+                        if (outfit != null) {
+                            showPanel(SettingsPanel.build(ctx, panelHost));
+                        } else if (!Prefs.simpleMode(ctx)) {
+                            showTileMenu();
+                        } else if (menuTaps.tap()) {
+                            logOpen("Settings (Menu x" + MenuTaps.COUNT + ")");
+                            showPanel(SettingsPanel.build(ctx, panelHost));
+                        }
                     }
                     return true;
                 }
@@ -199,6 +263,17 @@ public class HomeGrid implements SettingsPanel.Host {
             }
         };
         root.setClipChildren(false);
+
+        // Added first, so it draws behind the page: a large soft blob, most of it off the top
+        // left of the screen, recoloured (never moved) as the focus moves.
+        glow = new View(c);
+        int sw = c.getResources().getDisplayMetrics().widthPixels;
+        int sh = c.getResources().getDisplayMetrics().heightPixels;
+        int gs = Math.round(sh * 1.05f);
+        FrameLayout.LayoutParams glp = new FrameLayout.LayoutParams(gs, gs);
+        glp.leftMargin = Math.round(sw * 0.12f) - gs / 2;
+        glp.topMargin = Math.round(sh * 0.42f) - gs / 2;
+        root.addView(glow, glp);
 
         scroll = new ScrollView(c) {
             // Only the top edge fades under the top bar; the bottom row is not dimmed.
@@ -216,6 +291,20 @@ public class HomeGrid implements SettingsPanel.Host {
                 }
                 return handled;
             }
+
+            // The dock sits on the bottom fading edge, so the stock math nudged the page up on
+            // every move along it and keepAtTop() pulled it back: a jump each time. A tile that
+            // is already fully on screen needs no scroll.
+            @Override protected int computeScrollDeltaToGetChildRectOnScreen(android.graphics.Rect r) {
+                if (dock && r.top >= getScrollY() && r.bottom <= getScrollY() + getHeight()) return 0;
+                return super.computeScrollDeltaToGetChildRectOnScreen(r);
+            }
+
+            // A scroll can take the focused banner's heading away or bring it back.
+            @Override protected void onScrollChanged(int l, int t, int ol, int ot) {
+                super.onScrollChanged(l, t, ol, ot);
+                if (focusedCell != null && focusedCell.hasFocus()) placeTitle();
+            }
         };
         scroll.setVerticalScrollBarEnabled(false);
         scroll.setClipChildren(false);
@@ -228,7 +317,7 @@ public class HomeGrid implements SettingsPanel.Host {
         column.setOrientation(LinearLayout.VERTICAL);
         column.setClipChildren(false);
         column.setClipToPadding(false);
-        column.setPadding(dp(MARGIN_DP), dp(46), dp(MARGIN_DP), dp(MARGIN_DP));
+        column.setPadding(dp(MARGIN_DP), dp(46), dp(MARGIN_DP), dp(BOTTOM_DP));
         scroll.addView(column, new ScrollView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -319,7 +408,21 @@ public class HomeGrid implements SettingsPanel.Host {
         Backgrounds.Preset p = Backgrounds.current(ctx);
         Bitmap photo = null;
         String state = p.name;
-        if (!Backgrounds.photoChosen(ctx)) {
+        String id = Backgrounds.currentId(ctx);
+        if (Backgrounds.isLandscape(id)) {
+            // A shipped landscape: read from the assets, cached and dimmed like the photo.
+            String file = Backgrounds.landscapeFile(ctx, id);
+            String key = Backgrounds.assetKey(file);
+            photo = Backgrounds.photoFor(key);
+            if (file != null && photo == null) {
+                Backgrounds.loadAsset(ctx, file, new Runnable() {
+                    public void run() { applyBackground(); }
+                });
+                photo = Backgrounds.lastPhoto();
+                key = "loading";
+            }
+            state = "photo|" + (photo == null ? "none" : key) + "|" + Backgrounds.dimAlpha(ctx);
+        } else if (!Backgrounds.photoChosen(ctx)) {
             Backgrounds.drop();
         } else {
             java.io.File f = Backgrounds.photoFile(ctx);
@@ -339,15 +442,22 @@ public class HomeGrid implements SettingsPanel.Host {
         if (state.equals(painted)) return;
         painted = state;
         look = p;
+        // The glow belongs to the colour presets; over a picture it only tints it.
+        if (dock) setGlow(focusedAccent);
         root.setBackground(photo != null ? Backgrounds.photoDrawable(ctx, photo)
                 : OutfitBackgrounds.drawable(ctx, p));
         paintText(clock);
         paintText(greet);
         paintText(date);
         paintText(dateText);
+        if (topTitle != null && topTitle == barSpacer) paintText(topTitle);
         for (int i = 0; i < column.getChildCount(); i++) {
             View v = column.getChildAt(i);
             if (v instanceof TextView) paintText((TextView) v);
+            if (HEAD_TAG.equals(v.getTag())) {
+                ViewGroup line = (ViewGroup) v;
+                for (int j = 0; j < line.getChildCount(); j++) paintText((TextView) line.getChildAt(j));
+            }
         }
         // The ring and the outline are per look, so every cell is repainted.
         for (View cell : cellsByKey.values()) style(cell, cell == focusedCell);
@@ -437,6 +547,7 @@ public class HomeGrid implements SettingsPanel.Host {
 
     /** Focus for a fresh Home press: Live TV when it comes first, else as takeFocus(). */
     public void takeStartFocus() {
+        stopMoving();
         if (outfit != null && selectKey("app:com.amazon.firetv.youtube")) { keepAtTop(); return; }
         // The restore tile is the one thing worth seeing before anything else.
         if (AppModel.restorePopupLive() && selectKey(AppModel.RESTORE_KEY)) {
@@ -447,6 +558,8 @@ public class HomeGrid implements SettingsPanel.Host {
             scroll.scrollTo(0, 0);
             return;
         }
+        // The dock design starts on the dock, not on the first tile of the grid below it.
+        if (dock && !dockKeys.isEmpty() && selectKey(dockKeys.iterator().next())) return;
         takeFocus();
     }
 
@@ -463,7 +576,7 @@ public class HomeGrid implements SettingsPanel.Host {
      * top. Repeated after layout, which would otherwise scroll it flush with the screen edge.
      */
     private void keepAtTop() {
-        scroll.scrollTo(0, 0);
+        if (scroll.getScrollY() != 0) scroll.scrollTo(0, 0);
         scroll.post(new Runnable() {
             public void run() { scroll.scrollTo(0, 0); }
         });
@@ -494,13 +607,7 @@ public class HomeGrid implements SettingsPanel.Host {
         for (int i = 0; i < all.size(); i++) {
             if (focusedKey.equals(all.get(i).key())) { target = all.get(i); break; }
         }
-        if (target == null) return false;
-        // Settings and TV Health stay reachable so hidden tiles can always be restored. The
-        // settings shortcuts come and go with "Choose shortcuts" instead.
-        if (target.type == AppModel.TYPE_SETTINGS || target.type == AppModel.TYPE_HEALTH
-                || target.type == AppModel.TYPE_RESTORE || target.type == AppModel.TYPE_SHORTCUT) {
-            return false;
-        }
+        if (target == null || !hideable(target)) return false;
         Prefs.setHidden(ctx, target.key(), true);
         try {
             android.widget.Toast.makeText(ctx,
@@ -510,6 +617,196 @@ public class HomeGrid implements SettingsPanel.Host {
         layoutGen++;
         rebuild();
         return true;
+    }
+
+    /**
+     * Settings and TV Health stay, so hidden tiles can always be restored; the restore tile
+     * leaves by itself and the settings shortcuts come and go with "Choose shortcuts".
+     */
+    private static boolean hideable(AppModel.Item it) {
+        return it.type != AppModel.TYPE_SETTINGS && it.type != AppModel.TYPE_HEALTH
+                && it.type != AppModel.TYPE_RESTORE && it.type != AppModel.TYPE_SHORTCUT;
+    }
+
+    /** The model's item with this key, hidden or not; null if it has gone. */
+    private static AppModel.Item itemFor(String key) {
+        if (key == null) return null;
+        List<AppModel.Item> all = AppModel.allItems();
+        for (int i = 0; i < all.size(); i++) {
+            if (key.equals(all.get(i).key())) return all.get(i);
+        }
+        return null;
+    }
+
+    // ---------------------------------------------------------------- tile menu
+
+    /**
+     * Menu or a held Select on a tile: a small sheet to pin it to the front of its row, move
+     * it, or hide it. Not in Simple mode, not for the bar's pills, nor for the restore tile.
+     * @return true if the sheet opened.
+     */
+    private boolean showTileMenu() {
+        if (focusedKey == null || Prefs.simpleMode(ctx) || pillsByKey.containsKey(focusedKey)) {
+            return false;
+        }
+        final AppModel.Item it = itemFor(focusedKey);
+        if (it == null || it.type == AppModel.TYPE_RESTORE || !cellsByKey.containsKey(focusedKey)) {
+            return false;
+        }
+        final String key = it.key();
+        final boolean pinned = Prefs.isPinned(ctx, key);
+        logOpen("tile menu, " + it.label);
+        final Panel p = new Panel(ctx, it.label, null, Panel.SHEET);
+        p.addRow(ctx.getString(pinned ? R.string.tm_unpin : R.string.tm_pin), "", new Runnable() {
+            public void run() {
+                if (pinned) Prefs.unpin(ctx, key); else Prefs.pin(ctx, key);
+                closePanel();
+                reorder(key);
+            }
+        }).setHelp(ctx.getString(pinned ? R.string.tm_unpin_help : R.string.tm_pin_help));
+        p.addRow(ctx.getString(R.string.tm_move), "", new Runnable() {
+            public void run() {
+                closePanel();
+                startMoving(key, it.label);
+            }
+        }).setHelp(ctx.getString(R.string.tm_move_help)
+                // The dock is the front of this row (the TV apps, or every app with Apps in one
+                // row), so moving a tile there puts it on the dock.
+                + (dock && rowOf(it) == 3 ? " " + ctx.getString(Prefs.appsOneRow(ctx)
+                        ? R.string.tm_move_help_dock_all : R.string.tm_move_help_dock) : ""));
+        if (hideable(it)) {
+            p.addRow(ctx.getString(R.string.tm_hide), "", new Runnable() {
+                public void run() {
+                    closePanel();
+                    hideFocused();
+                }
+            }).setHelp(ctx.getString(R.string.tm_hide_help));
+        }
+        p.addRow(ctx.getString(R.string.set_close), "", new Runnable() {
+            public void run() { closePanel(); }
+        });
+        showPanel(p.root);
+        return true;
+    }
+
+    /**
+     * Pick a tile up where it stands: lit with the moving ring and told how it moves. Nothing
+     * is pinned until it moves (pinning it now would send it to the front of its row).
+     */
+    private void startMoving(String key, String label) {
+        moving = key;
+        View cell = cellsByKey.get(key);
+        if (cell != null) style(cell, cell.hasFocus());
+        try {
+            Toast.makeText(ctx, ctx.getString(R.string.tm_moving, label), Toast.LENGTH_LONG).show();
+        } catch (Throwable t) { }
+    }
+
+    /** Put a picked-up tile down where it is; its ring goes back to the usual one. */
+    private void stopMoving() {
+        if (moving == null) return;
+        String key = moving;
+        moving = null;
+        View cell = cellsByKey.get(key);
+        if (cell != null) style(cell, cell.hasFocus());
+    }
+
+    /**
+     * How far a D-pad key moves the picked-up tile: one place sideways; in the banner grid,
+     * a line (one row of columns) up or down. A scrolling row has no lines, so Up and Down
+     * do nothing there (and still never leave the tile).
+     */
+    private int moveStep(int code) {
+        if (code == android.view.KeyEvent.KEYCODE_DPAD_LEFT) return -1;
+        if (code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) return 1;
+        View cell = cellsByKey.get(moving);
+        boolean inRow = cell != null && cell.getParent() != null
+                && ((View) cell.getParent()).getParent() instanceof HorizontalScrollView;
+        if (inRow) return 0;
+        int cols = AppModel.columns(ctx);
+        return code == android.view.KeyEvent.KEYCODE_DPAD_UP ? -cols : cols;
+    }
+
+    /**
+     * The home screen row a tile sorts in, as AppModel's comparator groups them: the inputs
+     * row, the shortcuts, the TV apps' grid, the other apps (one grid for both when Apps in
+     * one row is on). A tile only ever trades places within its row.
+     */
+    private int rowOf(AppModel.Item it) {
+        if (it.type == AppModel.TYPE_RESTORE) return 0;
+        if (it.type == AppModel.TYPE_SHORTCUT) return 2;
+        if (it.type != AppModel.TYPE_APP) return 1;
+        if (it.banner != null && (it.tvApp || Prefs.appsOneRow(ctx))) return 3;
+        return 4;
+    }
+
+    /**
+     * Shift the picked-up tile by step places within its row, save the order and redraw with
+     * the tile still lit. Pinned tiles lead the row, so the tiles from the start of the row
+     * up to the old and the new place are pinned as they stand, in the order shown: the tile
+     * can go anywhere in its row and every tile before it keeps its place.
+     * @return true if it moved.
+     */
+    private boolean moveTile(String key, int step) {
+        AppModel.Item it = itemFor(key);
+        if (it == null || !cellsByKey.containsKey(key)) { stopMoving(); return false; }
+        List<String> pins = Prefs.pinned(ctx);
+        int row = rowOf(it);
+        // The row as drawn: pinned tiles in pin order, then the rest in the sort order. The
+        // big Live TV tile stands apart from its row, so it is not part of it.
+        boolean tvFirst = liveTvFirst();
+        List<AppModel.Item> shown = AppModel.visibleItems(ctx);
+        List<String> line = new ArrayList<String>();
+        for (int j = 0; j < shown.size(); j++) {
+            AppModel.Item s = shown.get(j);
+            if (tvFirst && s.type == AppModel.TYPE_LIVETV) continue;
+            if (rowOf(s) == row && cellsByKey.containsKey(s.key())) line.add(s.key());
+        }
+        int at = line.indexOf(key);
+        if (at < 0) return false;
+        int to = Math.max(0, Math.min(line.size() - 1, at + step));
+        if (to == at) return false;
+        for (int i = 0; i <= Math.max(at, to); i++) {
+            if (!pins.contains(line.get(i))) pins.add(line.get(i));
+        }
+        String anchor = line.get(to);
+        pins.remove(key);
+        pins.add(pins.indexOf(anchor) + (step < 0 ? 0 : 1), key);
+        Prefs.setPinned(ctx, pins);
+        reorder(key);
+        return true;
+    }
+
+    /** The pins changed: sort the model again, redraw, and keep the tile in view. */
+    private void reorder(String key) {
+        long t0 = android.os.SystemClock.uptimeMillis();
+        AppModel.resort(ctx);
+        layoutGen++;
+        rebuild();
+        reveal(key);
+        android.util.Log.i("Homestead", "tiles reordered in "
+                + (android.os.SystemClock.uptimeMillis() - t0) + "ms");
+    }
+
+    /**
+     * Scroll so the tile is on screen, with its focus ring, once a rebuild has been laid out
+     * and the old scroll offsets put back (after both of applyScroll's posts).
+     */
+    private void reveal(final String key) {
+        scroll.post(new Runnable() {
+            public void run() {
+                scroll.post(new Runnable() {
+                    public void run() {
+                        View cell = cellsByKey.get(key);
+                        if (cell == null) return;
+                        revealInDock(cell);
+                        if (dock && dockKeys.contains(key)) return;
+                        cell.requestRectangleOnScreen(new android.graphics.Rect(0, 0,
+                                cell.getWidth(), cell.getHeight() + dp(8)));
+                    }
+                });
+            }
+        });
     }
 
     /**
@@ -525,6 +822,7 @@ public class HomeGrid implements SettingsPanel.Host {
     }
 
     public void showPanel(final View v) {
+        stopMoving();
         // Stop the grid, and any panel underneath, from stealing D-pad focus.
         gridFocusable(false);
         View under = panels.isEmpty() ? null : panels.get(panels.size() - 1);
@@ -697,6 +995,9 @@ public class HomeGrid implements SettingsPanel.Host {
         if (v == null) v = pillsByKey.get(key);
         if (v == null) return false;
         v.requestFocus();
+        // A tile that already had focus gets no focus change, which is what brings the
+        // dock back down to the bottom of the screen.
+        if (dock && dockKeys.contains(key)) keepAtTop();
         return true;
     }
 
@@ -729,12 +1030,26 @@ public class HomeGrid implements SettingsPanel.Host {
         String keep = focusedKey;
         int y = scroll.getScrollY();
         int[] rx = getRowScrollX();
+        boolean wasDock = dock;
         build();
+        // A picked-up tile that the rebuild no longer draws (hidden from the other grid, say).
+        if (moving != null && !cellsByKey.containsKey(moving)) moving = null;
+        // The rows differ between the designs (the dock is the first in one, the inputs row
+        // in the other), and so does what a page offset means, so a switch starts the page at
+        // the top: the saved values are dropped and the page itself is scrolled back, since
+        // applyScroll leaves a zero alone.
+        if (dock != wasDock) {
+            y = 0;
+            rx = null;
+            keepAtTop();
+        }
         // Leave focus alone while a panel is open, or the grid would take it from the panel.
         if (panels.isEmpty()) {
             if (keep == null || !selectKey(keep)) takeFocus();
         }
         applyScroll(y, rx);
+        // A scroll kept from the other design would leave the dock half off the first screen.
+        if (dock && focusedKey != null && dockKeys.contains(focusedKey)) keepAtTop();
         // A restore tile that appears while someone is browsing does not take the focus:
         // a Select meant for the tile under the remote would land on it. It is at the top,
         // and a fresh Home press selects it (takeStartFocus()).
@@ -749,6 +1064,11 @@ public class HomeGrid implements SettingsPanel.Host {
     private void build() {
         builtOrder = AppModel.order();
         builtGen = layoutGen;
+        // Simple mode keeps its own plain layout whatever the design.
+        dock = Prefs.design(ctx) == Prefs.DESIGN_DOCK && !Prefs.simpleMode(ctx);
+        dockKeys.clear();
+        dockTitle = null;
+        if (!dock) setGlow(0);
         updateClock();
         try {
             if (outfit != null) {
@@ -769,12 +1089,16 @@ public class HomeGrid implements SettingsPanel.Host {
 
     /** Enough to get to Settings, using nothing that can throw. */
     private void buildFallback() {
+        dock = false;
+        setGlow(0);
         column.removeAllViews();
         cellsByKey.clear();
         rowHeaders.clear();
         rows.clear();
         focusedCell = null;
-        raisedRow = null;
+        titleSlots.clear();
+        headerName = null;
+        shownTitle = null;
         topTile = null;
         restoreSlot = null;
 
@@ -797,7 +1121,9 @@ public class HomeGrid implements SettingsPanel.Host {
         rowHeaders.clear();
         rows.clear();
         focusedCell = null;
-        raisedRow = null;
+        titleSlots.clear();
+        headerName = null;
+        shownTitle = null;
         restoreSlot = null;
 
         List<AppModel.Item> inputs = new ArrayList<AppModel.Item>();
@@ -811,6 +1137,9 @@ public class HomeGrid implements SettingsPanel.Host {
         AppModel.Item restore = null;
         topTile = null;
 
+        // Apps in one row: the other apps join the TV apps' grid, as the wide tiles AppModel
+        // builds for them (until it has reloaded after the switch, they are still cards).
+        boolean oneRow = Prefs.appsOneRow(ctx);
         List<AppModel.Item> all = AppModel.visibleItems(ctx);
         restoreShown = false;
         for (int i = 0; i < all.size(); i++) {
@@ -829,7 +1158,7 @@ public class HomeGrid implements SettingsPanel.Host {
                     || it.type == AppModel.TYPE_AMAZON_HOME
                     || it.type == AppModel.TYPE_SETTINGS || it.type == AppModel.TYPE_HEALTH) {
                 inputs.add(it);
-            } else if (it.tvApp && it.banner != null) {
+            } else if (it.banner != null && (it.tvApp || oneRow)) {
                 tv.add(it);
             } else {
                 nonTv.add(it);
@@ -862,11 +1191,18 @@ public class HomeGrid implements SettingsPanel.Host {
             }
         }
 
+        // Shortcuts placed in the bar are its pills; only those placed as a row are tiles.
+        if (Prefs.shortcutsPlace(ctx) != Prefs.SHORTCUTS_ROW) shortcuts.clear();
+
+        if (dock) {
+            addDockLayout(restore, liveTv, tv, inputs, shortcuts, nonTv);
+            return;
+        }
+
         String inputsTitle = ctx.getString(R.string.home_sec_inputs);
         String nonTvTitle = ctx.getString(R.string.home_sec_nontv);
-        String tvTitle = ctx.getString(R.string.home_sec_tv);
+        String tvTitle = ctx.getString(oneRow ? R.string.home_sec_apps : R.string.home_sec_tv);
         String shortcutsTitle = ctx.getString(R.string.home_sec_settings);
-        if (Prefs.shortcutsPlace(ctx) != Prefs.SHORTCUTS_ROW) shortcuts.clear();
         boolean first = true;
         if (restore != null) { addRestoreTile(restore); first = false; }
         if (liveTv != null)  { addLiveTvTile(liveTv); first = false; }
@@ -893,6 +1229,157 @@ public class HomeGrid implements SettingsPanel.Host {
             }
             first = false;
         }
+    }
+
+    /**
+     * The dock design: Live TV (when it comes first) and the first TV apps, in their sort
+     * order, on a band at the bottom of the first screen, then one grid with everything
+     * else (inputs, shortcuts placed as a row, the remaining TV apps, non-TV apps) in the
+     * row order chosen in Settings, no headers.
+     */
+    private void addDockLayout(AppModel.Item restore, AppModel.Item liveTv, List<AppModel.Item> tv,
+                               List<AppModel.Item> inputs, List<AppModel.Item> shortcuts,
+                               List<AppModel.Item> nonTv) {
+        if (restore != null) addRestoreTile(restore);
+        int n = Math.min(dockCount(liveTv != null), tv.size());
+        if (liveTv != null || n > 0) addDock(liveTv, tv.subList(0, n), restore == null);
+        List<AppModel.Item> grid = new ArrayList<AppModel.Item>();
+        List<String> order = Prefs.rowOrder(ctx);
+        for (int i = 0; i < order.size(); i++) {
+            String row = order.get(i);
+            if (row.equals(Prefs.ROW_SHORTCUTS)) grid.addAll(shortcuts);
+            else if (row.equals(Prefs.ROW_INPUTS)) grid.addAll(inputs);
+            else if (row.equals(Prefs.ROW_NONTV)) grid.addAll(nonTv);
+            else grid.addAll(tv.subList(n, tv.size()));
+        }
+        if (!grid.isEmpty()) addTileGrid(grid);
+    }
+
+    /**
+     * How many TV apps the dock holds at the chosen size: as many as fit the screen's width,
+     * beside the Live TV tile when that comes first (one and a half tiles wide), and at least
+     * one without it. The band still scrolls sideways, as a safety net for a narrower screen.
+     */
+    private int dockCount(boolean featured) {
+        int h = dp(DOCK_H_DP[Prefs.dockSize(ctx)]);
+        int normalW = h * 16 / 9;
+        int widest = featured ? normalW * 3 / 2 : normalW;
+        int padH = Math.max(dp(DOCK_PAD_DP), Math.round(widest * (DOCK_FOCUS_SCALE - 1f) / 2f) + dp(2));
+        int avail = ctx.getResources().getDisplayMetrics().widthPixels - 2 * dp(MARGIN_DP) - 2 * padH;
+        if (featured) avail -= widest + dp(GAP_DP);
+        int n = (avail + dp(GAP_DP)) / (normalW + dp(GAP_DP));
+        return Math.max(featured ? 0 : 1, n);
+    }
+
+    /** The translucent band and its title line; pinned to the bottom when pin is set. */
+    private void addDock(AppModel.Item liveTv, List<AppModel.Item> apps, boolean pin) {
+        TextView title = new TextView(ctx);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
+        title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        title.setSingleLine(true);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        paintText(title);
+        title.setText(liveTv != null ? liveTv.label : apps.get(0).label);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tlp.bottomMargin = dp(10);
+
+        int h = dp(DOCK_H_DP[Prefs.dockSize(ctx)]);
+        int normalW = h * 16 / 9;
+        int featuredW = normalW * 3 / 2;
+        // Room inside the band for a focused tile's growth and its lifted shadow, which would
+        // otherwise be cut by the band's edge (the band clips, so tiles past its end are cut
+        // off cleanly at the larger sizes).
+        int widest = liveTv != null ? featuredW : normalW;
+        int padH = Math.max(dp(DOCK_PAD_DP), Math.round(widest * (DOCK_FOCUS_SCALE - 1f) / 2f) + dp(2));
+        int padV = Math.round(h * (DOCK_FOCUS_SCALE - 1f) / 2f) + dp(DOCK_LIFT_DP) + dp(4);
+        int bandH = h + 2 * padV;
+
+        if (pin) {
+            // Open space above the dock, so it sits at the bottom of the first screen.
+            title.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            FrameLayout.LayoutParams slp = (FrameLayout.LayoutParams) scroll.getLayoutParams();
+            int spacer = ctx.getResources().getDisplayMetrics().heightPixels - slp.topMargin
+                    - column.getPaddingTop() - title.getMeasuredHeight() - tlp.bottomMargin
+                    - bandH - dp(DOCK_BOTTOM_DP);
+            if (spacer > 0) column.addView(new View(ctx), new LinearLayout.LayoutParams(1, spacer));
+        }
+        column.addView(title, tlp);
+        dockTitle = title;
+
+        HorizontalScrollView hs = new CardRow(ctx);
+        hs.setHorizontalScrollBarEnabled(false);
+        hs.setClipToPadding(false);
+        rows.add(hs);
+        LinearLayout row = new LinearLayout(ctx);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setClipChildren(false);
+        row.setClipToPadding(false);
+        row.setPadding(padH, padV, padH, padV);
+        if (liveTv != null) {
+            View cell = buildCard(liveTv);
+            if (topTile == null) topTile = cell;
+            dockCellKeys(cell, true, apps.isEmpty());
+            row.addView(cell, new LinearLayout.LayoutParams(featuredW, h));
+            dockKeys.add(liveTv.key());
+        }
+        for (int i = 0; i < apps.size(); i++) {
+            View cell = buildTile(apps.get(i));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(normalW, h);
+            if (i > 0 || liveTv != null) lp.leftMargin = dp(GAP_DP);
+            dockCellKeys(cell, i == 0 && liveTv == null, i == apps.size() - 1);
+            row.addView(cell, lp);
+            dockKeys.add(apps.get(i).key());
+        }
+        hs.addView(row, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        FrameLayout band = new FrameLayout(ctx);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(18));
+        bg.setColor(DOCK_BAND_COLOR);
+        band.setBackground(bg);
+        band.addView(hs, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.bottomMargin = dp(DOCK_BOTTOM_DP);
+        column.addView(band, blp);
+    }
+
+    /**
+     * The glow in the focused banner's colour; none for a tile without art, and none over a
+     * photo or a landscape, which it would only tint.
+     */
+    private void setGlow(int accent) {
+        if (look == Backgrounds.PHOTO_LOOK) accent = 0;
+        if (accent == glowColor) return;
+        glowColor = accent;
+        if (accent == 0) { glow.setBackground(null); return; }
+        GradientDrawable d = new GradientDrawable();
+        d.setShape(GradientDrawable.OVAL);
+        d.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+        d.setGradientRadius(glow.getLayoutParams().width / 2f);
+        d.setColors(new int[] { (GLOW_ALPHA << 24) | (accent & 0xFFFFFF), accent & 0xFFFFFF });
+        glow.setBackground(d);
+    }
+
+    /** Scrolls the dock so a focused end tile keeps the band's padding, its zoom uncut. */
+    private void revealInDock(final View cell) {
+        cell.post(new Runnable() {
+            public void run() {
+                if (!(cell.getParent() instanceof ViewGroup)) return;
+                ViewGroup row = (ViewGroup) cell.getParent();
+                if (!(row.getParent() instanceof HorizontalScrollView)) return;
+                HorizontalScrollView hs = (HorizontalScrollView) row.getParent();
+                int x = hs.getScrollX();
+                int left = cell.getLeft() - row.getPaddingLeft();
+                int right = cell.getRight() + row.getPaddingRight();
+                if (left < x) hs.smoothScrollTo(left, 0);
+                else if (right > x + hs.getWidth()) hs.smoothScrollTo(right - hs.getWidth(), 0);
+            }
+        });
     }
 
     /** Live TV first: one large tile, two banner cells wide, on its own row. */
@@ -963,21 +1450,52 @@ public class HomeGrid implements SettingsPanel.Host {
     private void buildTopBar() {
         topBar.removeAllViews();
         pillsByKey.clear();
-        boolean bar = Prefs.shortcutsPlace(ctx) == Prefs.SHORTCUTS_BAR && !Prefs.simpleMode(ctx);
+        // The dock design always has the bar: its clock, date and Settings pill.
+        boolean bar = (dock || Prefs.shortcutsPlace(ctx) == Prefs.SHORTCUTS_BAR)
+                && !Prefs.simpleMode(ctx);
         barShown = bar;
         boolean showClock = Prefs.clockMode(ctx) != Prefs.CLOCK_OFF;
 
-        View spacer = new View(ctx);
+        // With the bar, the space between the clock and the pills is the top title line.
+        TextView spacer = new TextView(ctx);
+        spacer.setTextSize(TypedValue.COMPLEX_UNIT_SP, HEADER_SP);
+        spacer.setSingleLine(true);
+        spacer.setEllipsize(TextUtils.TruncateAt.END);
+        spacer.setGravity(Gravity.CENTER);
+        spacer.setAlpha(0.8f);
+        paintText(spacer);
         barSpacer = spacer;
+        topTitle = spacer;
         barRule = null;
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(0, 1, 1f);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        slp.leftMargin = dp(16);
+        slp.rightMargin = dp(16);
 
         if (!bar) {
-            // The plain layout: the clock alone at the right.
+            // The plain layout: the clock alone at the right. Nothing backs it there, and the
+            // page scrolls under it, so the top title is a dark chip beside the clock, shown
+            // only while it names something.
             clock.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
             clock.setTypeface(Typeface.DEFAULT);
             dateText.setVisibility(View.GONE);
-            topBar.addView(spacer, slp);
+            TextView chip = new TextView(ctx);
+            chip.setTextColor(Color.WHITE);
+            chip.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+            chip.setSingleLine(true);
+            chip.setEllipsize(TextUtils.TruncateAt.END);
+            chip.setPadding(dp(12), dp(4), dp(12), dp(4));
+            GradientDrawable pill = new GradientDrawable();
+            pill.setCornerRadius(dp(14));
+            pill.setColor(0xD9101820);
+            chip.setBackground(pill);
+            chip.setVisibility(View.GONE);
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            clp.rightMargin = dp(16);
+            topTitle = chip;
+            topBar.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
+            topBar.addView(chip, clp);
             topBar.addView(clock);
             updateClock();
             // Where the page starts is up to updateHead: below the greeting and date, or at the top.
@@ -1007,9 +1525,13 @@ public class HomeGrid implements SettingsPanel.Host {
         topBar.addView(spacer, slp);
 
         List<AppModel.Item> pills = new ArrayList<AppModel.Item>();
-        List<AppModel.Item> all = AppModel.visibleItems(ctx);
-        for (int i = 0; i < all.size() && pills.size() < BAR_MAX - 2; i++) {
-            if (all.get(i).type == AppModel.TYPE_SHORTCUT) pills.add(all.get(i));
+        // Shortcuts are pills only when placed in the bar. The dock design keeps the bar up
+        // whatever the placement, and shortcuts placed as a row are cards in its grid.
+        if (Prefs.shortcutsPlace(ctx) == Prefs.SHORTCUTS_BAR) {
+            List<AppModel.Item> all = AppModel.visibleItems(ctx);
+            for (int i = 0; i < all.size() && pills.size() < BAR_MAX - 2; i++) {
+                if (all.get(i).type == AppModel.TYPE_SHORTCUT) pills.add(all.get(i));
+            }
         }
         pills.add(barItem(AppModel.SC_MORE, ctx.getString(R.string.home_sc_more), "more"));
         pills.add(barItem(AppModel.SC_SETTINGS, ctx.getString(R.string.home_sc_settings), "settings"));
@@ -1030,7 +1552,7 @@ public class HomeGrid implements SettingsPanel.Host {
         // padding keeps the first tile well clear of the pills when the page is at the top.
         updateClock();
         setScrollTop(BAR_H_DP);
-        column.setPadding(dp(MARGIN_DP), dp(28), dp(MARGIN_DP), dp(MARGIN_DP));
+        column.setPadding(dp(MARGIN_DP), dp(28), dp(MARGIN_DP), dp(BOTTOM_DP));
     }
 
     /** The bar's height, which the scrolling page starts under. */
@@ -1344,18 +1866,38 @@ public class HomeGrid implements SettingsPanel.Host {
         });
     }
 
-    private TextView addHeader(String text, boolean first) {
+    /** A row's heading line: its name, and at the right the focused banner's name. */
+    private static final String HEAD_TAG = "head";
+
+    private View addHeader(String text, boolean first) {
+        LinearLayout line = new LinearLayout(ctx);
+        line.setOrientation(LinearLayout.HORIZONTAL);
+        line.setGravity(Gravity.BOTTOM);
+        line.setTag(HEAD_TAG);
         TextView h = new TextView(ctx);
         h.setText(text);
         paintText(h);
         h.setTextSize(TypedValue.COMPLEX_UNIT_SP, HEADER_SP);
         h.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        line.addView(h);
+        TextView name = new TextView(ctx);
+        paintText(name);
+        name.setTextSize(TypedValue.COMPLEX_UNIT_SP, HEADER_SP);
+        name.setSingleLine(true);
+        name.setEllipsize(TextUtils.TruncateAt.END);
+        name.setGravity(Gravity.END);
+        name.setAlpha(0.75f);
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        nlp.leftMargin = dp(24);
+        line.addView(name, nlp);
+        headerName = name;
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = first ? 0 : dp(HEADER_TOP_DP);
         lp.bottomMargin = dp(HEADER_BOTTOM_DP);
-        column.addView(h, lp);
-        return h;
+        column.addView(line, lp);
+        return line;
     }
 
     /** Cards, or banner tiles made from the icons when "Wide tiles" is on (AppModel builds them). */
@@ -1424,7 +1966,11 @@ public class HomeGrid implements SettingsPanel.Host {
                 if (i > 0) rlp.topMargin = dp(GAP_DP);
                 column.addView(row, rlp);
             }
-            View cell = buildTile(items.get(i));
+            // The dock design's one grid mixes banners with the cards of inputs and the like.
+            AppModel.Item it = items.get(i);
+            View cell = it.banner != null ? buildTile(it) : buildCard(it);
+            TextView slot = dock ? topTitle : headerName;
+            if (it.banner != null && slot != null) titleSlots.put(it.key(), slot);
             boolean rowEnd = i % AppModel.columns(ctx) == AppModel.columns(ctx) - 1
                     || i == items.size() - 1;
             stopAt(cell, i % AppModel.columns(ctx) == 0, rowEnd);
@@ -1441,15 +1987,39 @@ public class HomeGrid implements SettingsPanel.Host {
         cell.setFocusable(true);
         cell.setFocusableInTouchMode(true);
         cell.setClipChildren(false);
+        if (dock) {
+            // A rounded outline, so the lifted tile's shadow has the tile's shape.
+            cell.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                public void getOutline(View v, android.graphics.Outline o) {
+                    o.setRoundRect(0, 0, v.getWidth(), v.getHeight(), dp(8));
+                }
+            });
+        }
         cell.setOnFocusChangeListener(new View.OnFocusChangeListener() {
             public void onFocusChange(View v, boolean has) {
                 if (has) {
                     focusedCell = v;
                     focusedKey = it.key();
+                    placeTitle();
                     style(v, true, true);
                     if (v == topTile) keepAtTop();
+                    if (dock) {
+                        focusedAccent = it.accent;
+                        setGlow(it.accent);
+                        if (dockKeys.contains(it.key())) {
+                            keepAtTop();
+                            revealInDock(v);
+                            if (dockTitle != null) dockTitle.setText(it.label);
+                        }
+                    }
                 } else {
                     style(v, false, true);
+                    // Focus went to something that is not a tile (a pill, a page): no name.
+                    v.post(new Runnable() {
+                        public void run() {
+                            if (focusedCell == v && !v.hasFocus()) showTitle(null, null);
+                        }
+                    });
                 }
             }
         });
@@ -1465,7 +2035,10 @@ public class HomeGrid implements SettingsPanel.Host {
             // In Simple mode a held Select falls through to a normal click.
             public boolean onLongClick(View v) {
                 focusedKey = it.key();
-                return !Prefs.simpleMode(ctx) && hideFocused();
+                if (outfit != null) {
+                    return !Prefs.simpleMode(ctx) && hideFocused();
+                }
+                return !Prefs.simpleMode(ctx) && showTileMenu();
             }
         });
         cellsByKey.put(it.key(), cell);
@@ -1508,12 +2081,18 @@ public class HomeGrid implements SettingsPanel.Host {
      */
     private void style(View v, boolean focused, boolean animate) {
         if (!(v instanceof FrameLayout)) return;
+        // A bar pill draws its own focus (ring, 1.06x); a tile's grow and shadow on top of it
+        // ran past the bar's edge, which cuts it.
+        if (pillsByKey.containsValue(v)) return;
         FrameLayout f = (FrameLayout) v;
+        if (dock) { dockStyle(f, focused, animate); return; }
         float scale = focused ? FOCUS_SCALE : 1f;
         if (focused) {
+            // A picked-up tile wears the moving ring instead of the look's.
+            boolean lifted = moving != null && cellsByKey.get(moving) == f;
             GradientDrawable ring = new GradientDrawable();
             ring.setCornerRadius(dp(8));
-            ring.setStroke(dp(3), look.ring);
+            ring.setStroke(dp(lifted ? 4 : 3), lifted ? MOVE_RING : look.ring);
             ring.setColor(Color.TRANSPARENT);
             f.setForeground(ring);
             f.setTranslationZ(dp(8));
@@ -1528,33 +2107,53 @@ public class HomeGrid implements SettingsPanel.Host {
             f.setScaleX(scale);
             f.setScaleY(scale);
         }
-        // The label hangs over the next grid row, which is drawn later, so the focused tile's
-        // row is lifted above it. Only one row is ever lifted, and only a focus gain moves
-        // the lift: a loss can't tell whether focus is staying in the row.
-        View row = (View) f.getParent();
-        if (focused && raisedRow != null && raisedRow != row) {
-            raisedRow.setTranslationZ(0f);
-            raisedRow = null;
+        if (outfit != null) OutfitLayout.style(ctx, f, focused);
+    }
+
+    /**
+     * The dock design's focus (PR #27): a white rim, a spring to DOCK_FOCUS_SCALE with a slight
+     * overshoot, and a lift that casts a shadow. The grown tile and its shadow are scrolled
+     * fully on screen, so neither is cut at the bottom edge.
+     */
+    private void dockStyle(final FrameLayout f, boolean focused, boolean animate) {
+        Drawable rim = outline();
+        if (focused) {
+            boolean lifted = moving != null && cellsByKey.get(moving) == f;
+            GradientDrawable d = new GradientDrawable();
+            d.setCornerRadius(dp(8));
+            d.setStroke(dp(lifted ? 4 : 3), lifted ? MOVE_RING : Color.WHITE);
+            d.setColor(Color.TRANSPARENT);
+            rim = d;
         }
-        View name = f.findViewWithTag(NAME_TAG);
-        if (name != null) {
-            name.setVisibility(focused ? View.VISIBLE : View.INVISIBLE);
-            if (focused && row != null) {
-                row.setTranslationZ(dp(8));
-                raisedRow = row;
-            }
-            // Scroll far enough to show the label too, not only the banner.
-            if (focused && animate) {
-                final FrameLayout cell = f;
-                cell.post(new Runnable() {
-                    public void run() {
-                        cell.requestRectangleOnScreen(new android.graphics.Rect(0, 0,
-                                cell.getWidth(), cell.getHeight() + dp(NAME_H_DP + 8)));
-                    }
-                });
-            }
+        f.setForeground(rim);
+        float scale = focused ? DOCK_FOCUS_SCALE : 1f;
+        float z = focused ? dp(DOCK_LIFT_DP) : 0f;
+        f.animate().cancel();
+        if (!animate || f.getWidth() == 0) {
+            f.setScaleX(scale);
+            f.setScaleY(scale);
+            f.setTranslationZ(z);
+        } else {
+            f.animate().scaleX(scale).scaleY(scale).translationZ(z)
+                    .setDuration(focused ? 220L : 160L)
+                    .setInterpolator(focused ? DOCK_IN : DOCK_OUT).start();
         }
-        OutfitLayout.style(ctx, f, focused);
+        // Dock tiles are kept in view by keepAtTop() and revealInDock(); scrolling for them
+        // here too made the page jump on every move along the dock.
+        boolean inDock = f.getParent() != null
+                && ((View) f.getParent()).getParent() instanceof HorizontalScrollView;
+        if (focused && animate && !inDock) {
+            f.post(new Runnable() {
+                public void run() {
+                    int gx = Math.round(f.getWidth() * (DOCK_FOCUS_SCALE - 1f) / 2f) + dp(4);
+                    int gy = Math.round(f.getHeight() * (DOCK_FOCUS_SCALE - 1f) / 2f) + dp(4);
+                    int below = dp(DOCK_LIFT_DP);
+                    f.requestRectangleOnScreen(new android.graphics.Rect(-gx, -gy,
+                            f.getWidth() + gx, f.getHeight() + gy + below));
+                }
+            });
+        }
+        if (outfit != null) OutfitLayout.style(ctx, f, focused);
     }
 
     /**
@@ -1570,6 +2169,75 @@ public class HomeGrid implements SettingsPanel.Host {
                         || (last && code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT);
             }
         });
+    }
+
+    /**
+     * A dock tile's keys: Left and Right stop at the band's ends, as stopAt() does, and Up
+     * goes to the nearest pill in the top bar. The focus search only found the bar from the
+     * tiles under the pills, so Up from the left of the dock went nowhere.
+     */
+    private void dockCellKeys(View cell, final boolean first, final boolean last) {
+        cell.setOnKeyListener(new View.OnKeyListener() {
+            public boolean onKey(View v, int code, android.view.KeyEvent e) {
+                if ((first && code == android.view.KeyEvent.KEYCODE_DPAD_LEFT)
+                        || (last && code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT)) {
+                    return true;
+                }
+                if (code != android.view.KeyEvent.KEYCODE_DPAD_UP
+                        || e.getAction() != android.view.KeyEvent.ACTION_DOWN) {
+                    return false;
+                }
+                View pill = nearestPill(v);
+                return pill != null && pill.requestFocus();
+            }
+        });
+    }
+
+    /** The shown top bar pill closest to the view across the screen; null without a bar. */
+    private View nearestPill(View from) {
+        int[] at = new int[2];
+        from.getLocationOnScreen(at);
+        int x = at[0] + from.getWidth() / 2;
+        View best = null;
+        int bestD = Integer.MAX_VALUE;
+        for (View p : pillsByKey.values()) {
+            if (!p.isShown() || !p.isFocusable()) continue;
+            p.getLocationOnScreen(at);
+            int d = Math.abs(at[0] + p.getWidth() / 2 - x);
+            if (d < bestD) { bestD = d; best = p; }
+        }
+        return best;
+    }
+
+    /**
+     * Name the focused banner on its title line: its row's heading while that is on screen,
+     * else the top line. Called on focus and on every scroll, as a scroll can take the
+     * heading away or bring it back.
+     */
+    private void placeTitle() {
+        AppModel.Item it = focusedKey == null ? null : itemFor(focusedKey);
+        TextView slot = it == null ? null : titleSlots.get(focusedKey);
+        if (slot != null && slot != topTitle && !onScreen((View) slot.getParent())) slot = topTitle;
+        showTitle(slot, it == null ? null : it.label);
+    }
+
+    /** A heading line (a child of the column) is wholly inside the scrolled view. */
+    private boolean onScreen(View line) {
+        int top = line.getTop() - scroll.getScrollY();
+        return top >= 0 && top + line.getHeight() <= scroll.getHeight();
+    }
+
+    /** Name a focused banner on its title line, and clear the line that named the last one. */
+    private void showTitle(TextView slot, String name) {
+        if (shownTitle != null && shownTitle != slot) shownTitle.setText("");
+        if (slot != null) slot.setText(name);
+        shownTitle = slot;
+        // The plain layout's chip shows only while it names something.
+        if (topTitle != null && topTitle != barSpacer) {
+            topTitle.setVisibility(topTitle.length() > 0 ? View.VISIBLE : View.GONE);
+        }
+        // A grid tile named in the bar: the dock's own line would name another app.
+        if (dock && slot == topTitle && dockTitle != null) dockTitle.setText("");
     }
 
     /** Swallow the given D-pad keys on a cell, for the bar's edges and its Up. */
@@ -1590,28 +2258,7 @@ public class HomeGrid implements SettingsPanel.Host {
         img.setImageBitmap(it.banner);
         cell.addView(img, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
-        // The app's name, shown while focused. It hangs below the banner into the gap and
-        // over the row beneath (the focused cell draws on top), so rows keep their height.
-        TextView name = new TextView(ctx);
-        name.setTag(NAME_TAG);
-        name.setText(it.label);
-        name.setTextColor(Color.WHITE);
-        name.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        name.setSingleLine(true);
-        name.setEllipsize(TextUtils.TruncateAt.END);
-        name.setGravity(Gravity.CENTER);
-        name.setPadding(dp(8), 0, dp(8), 0);
-        GradientDrawable pill = new GradientDrawable();
-        pill.setCornerRadius(dp(10));
-        pill.setColor(0xD9101820);
-        name.setBackground(pill);
-        name.setVisibility(View.INVISIBLE);
-        FrameLayout.LayoutParams nlp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, dp(NAME_H_DP),
-                Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        name.setTranslationY(dp(NAME_H_DP + 4));
-        cell.addView(name, nlp);
+        // A banner has no name of its own; the title line names it while it is focused.
         return cell;
     }
 
@@ -1624,7 +2271,8 @@ public class HomeGrid implements SettingsPanel.Host {
         // Live TV first: inputs go a quiet grey so only the Live TV tile stands out, and
         // app labels get larger and brighter.
         boolean tvFirst = liveTvFirst();
-        if (textTile) card.setColor(tvFirst ? 0xFF2A333D : 0xFF0E5A63);
+        if (dock) card.setColor(look == Backgrounds.PHOTO_LOOK ? 0xA61B1E24 : DOCK_CARD_COLOR);
+        else if (textTile) card.setColor(tvFirst ? 0xFF2A333D : 0xFF0E5A63);
         else card.setColor(0xFF033058);
         cell.setBackground(card);
 
@@ -1670,7 +2318,8 @@ public class HomeGrid implements SettingsPanel.Host {
         ImageView ic = new ImageView(ctx);
         ic.setScaleType(ImageView.ScaleType.FIT_CENTER);
         if (it.icon != null) ic.setImageBitmap(it.icon);
-        int isz = dp(CARD_H_DP) * 62 / 100;
+        // A grid cell is smaller than a card in a row, so the icon leaves room for the name.
+        int isz = dock ? dp(34) : dp(CARD_H_DP) * 62 / 100;
         LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(isz, isz);
         ilp.rightMargin = dp(8);
         row.addView(ic, ilp);
@@ -1787,6 +2436,15 @@ public class HomeGrid implements SettingsPanel.Host {
             return;
         }
         AppModel.noteLaunched(ctx, it);
+        // The Appstore's launcher entry (the "Your apps" grid) hands straight to Amazon's home
+        // screen, which the Home redirect then sends back here: open the store itself.
+        if (AppModel.APPSTORE_PKG.equals(it.pkg)) {
+            try {
+                ctx.startActivity(new Intent().setClassName(it.pkg, AppModel.APPSTORE_HOME)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                return;
+            } catch (Throwable t) { }
+        }
         try {
             Intent i = new Intent(Intent.ACTION_MAIN);
             i.setClassName(it.pkg, it.cls);
